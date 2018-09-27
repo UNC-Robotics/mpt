@@ -67,7 +67,8 @@ void testSE3dist() {
     std::get<1>(a) << 1, 2, 3;
     std::get<Vec3>(b) << 1, 0, -1;
 
-    EXPECT(space.distance(a, b)) == 3.0/2 * so3w + std::sqrt(0.0 + 2.0*2.0 + 4.0*4.0) * l2w;
+    Scalar expected = 3.0/2 * so3w + std::sqrt(0.0 + 2.0*2.0 + 4.0*4.0) * l2w;
+    EXPECT(std::abs(space.distance(a, b) - expected)) < Scalar(1e-9);
 }
 
 

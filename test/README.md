@@ -1,12 +1,19 @@
-Running the test requires either gnumake, or a recent version of bash and the ninja build system.
+# Unit Tests for MPT
 
-To use gnumake:
+Running the unit tests requires [ninja](https://ninja-build.org/).  The build system assumes that [Nigh](https://github.com/UNC-Robotics/nigh) is checked out at the same directory level as `mpt`.
 
-    % make -j8
-
-To use ninja:
-
-    % ./generate_ninja_build.sh
+    % ./configure.sh
     % ninja
 
-The command ./generate_ninja_build.sh will have to be run every time a new class is added.
+Test classes are in `*_test.cpp` files.  The `./configure.sh` script finds files that match this pattern and generates the build rules to run the tests.  Whenever a new test is added the script will have to be run again.
+
+Some `./configure.sh` script behaviors can be overridden with environment variables.  To set the C++ compiler, use the `CXX` environment variable.  To set the flags the compile will use, set the `CFLAGS` environment variable.   Here are a few examples:
+
+To generate a build file that will use clang++ and compile in debug symbols:
+
+    % CXX=clang++ CFLAGS=-g ./configure.sh
+
+To generate a build file that will use g++ using the default compiler flags:
+
+    % CXX=g++ ./configure.sh
+

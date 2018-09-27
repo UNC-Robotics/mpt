@@ -52,7 +52,7 @@ TEST(distance) {
 
     // currently the distance metric is halved since the distance is
     // computed acos(abs(dot(a,b))) without an additional 2* multiplier.
-    EXPECT(space.distance(a, b)) == 3.0/2;
+    EXPECT(std::abs(space.distance(a, b) - 3.0/2)) < 1e-10;
 }
 
 TEST(interpolate) {
