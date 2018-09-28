@@ -22,6 +22,8 @@ case $CXX_VERSION in
             [1-9][0-9].*) ;;
             *) echo "WARNING: unknown version.  Build may fail." ;;
         esac
+        # GCC generates a lot of warning messages with Eigen
+        CFLAGS+=" -Wno-ignored-attributes"
         ;;
     clang*)
         # clang version X.Y.Z (...)
