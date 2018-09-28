@@ -6,7 +6,36 @@ NINJA="${NINJA:-`which ninja`}" || die "ninja build tool not found"
 echo "Ninja found at $NINJA"
 
 CXX="${CXX:-`which c++`}" || CXX=`which clang++` || CXX=`which g++` || die "C++ compile not found"
-echo "C++ compiler found at $CXX"
+
+set -o pipefail
+CXX_VERSION=$($CXX --version | head -n 1) || die "C++ compiler not found"
+case $CXX_VERSION in
+    g++*)
+        # g++ (...) X.Y.Z
+        # g++ (...) X.Y.Z 20171010
+        GCC_VERSION=${CXX_VERSION##*) } # remove longest prefix before ') '
+        echo "GNU C++ compiler $GCC_VERSION found at $CXX"
+        case $GCC_VERSION in
+            [0-4].*) echo "WARNING: compiler version too old.  Build will fail." ;;
+            [56].*) echo "WARNING: compiler version too old.  Build may fail." ;;
+            [789].*) ;;
+            [1-9][0-9].*) ;;
+            *) echo "WARNING: unknown version.  Build may fail." ;;
+        esac
+        ;;
+    clang*)
+        # clang version X.Y.Z (...)
+        CLANG_VERSION=${CXX_VERSION#*version } # remove prefix up to 'version'
+        CLANG_VERSION=${CLANG_VERSION%% *} # remove suffix after space
+        echo "LLVM C++ compiler $CLANG_VERSION found at $CXX"
+        if [[ $CLANG_VERSION = [0-4].* ]] ; then
+            echo "WARNING: compiler version too old.  Build will fail."
+        fi
+        ;;
+    *)
+        echo "WARNING: unknown compiler.  Build may fail."
+        ;;
+esac
 
 PKG_CONFIG="${PKG_CONFIG:-`which pkg-config`}" || die "pkg-config not found"
 echo "pkg-config found at $PKG_CONFIG"
@@ -21,6 +50,12 @@ CFLAGS="${CFLAGS:--O3 -march=native}"
 CFLAGS+=" -std=c++17 -I../src -I../../nigh/src"
 CFLAGS+=" $($PKG_CONFIG --cflags-only-I $DEPS_ALL)"
 LIBS="$($PKG_CONFIG --libs eigen3 $DEPS_ALL)"
+
+case `uname` in
+    Linux)
+        LIBS+=" -lpthread"
+    ;;
+esac
 
 echo "Required dependencies found, generating build.ninja"
 exec 3> build.ninja # open build.ninja for writing, use descriptor 3
