@@ -287,12 +287,13 @@ int main(int argc, char *argv[]) {
     using Threads = single_threaded;
 #endif
 
+    static constexpr bool reportStats = false;
 
     if (algorithm == "rrt") {
-        using Algorithm = PRRT<report_stats<true>, Threads, NN>;
+        using Algorithm = PRRT<report_stats<reportStats>, Threads, NN>;
         return runPlanner<S, Algorithm>(solveTimeMillis, nodeCount, terminateWhenSolved);
     } else if (algorithm == "rrtstar") {
-        using Algorithm = PRRTStar<report_stats<true>, Threads, NN>;
+        using Algorithm = PRRTStar<report_stats<reportStats>, Threads, NN>;
         return runPlanner<S, Algorithm>(solveTimeMillis, nodeCount, terminateWhenSolved);
     } else {
         MPT_LOG(ERROR) << "algorithm invalid: " << algorithm;

@@ -63,17 +63,6 @@
 
 namespace unc::robotics::mpt::impl::prrt_star {
 
-    // TODO: move this (or something like it to a common place)
-    template <typename T>
-    struct EmptyStat {
-        EmptyStat() {}
-        EmptyStat& operator ++ () { return *this; }
-        template <typename Char, typename Traits>
-        friend decltype(auto) operator << (std::basic_ostream<Char, Traits>& out, const EmptyStat&) {
-            return out << "<untracked>";
-        }
-    };
-
     // // TODO: move this (or something like it to a common place)
     // template <std::intmax_t d, int n = 0>
     // struct log10 : log10<d/10,n+1> {
@@ -114,12 +103,13 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
     template <>
     struct WorkerStats<false> {
-        EmptyStat<std::size_t> iterations() const { return {}; };
-        EmptyStat<std::size_t> biasedSamples() const { return {}; };
-        EmptyStat<std::size_t> rewireCount() const { return {}; };
-        // TODO: validMotion
-        // TODO: rewireTests
-        // TODO: nearest
+        void iteration() const {}
+        void biasedSample() const {}
+        void rewireTests(std::size_t) const {}
+        void rewireCount() const {}
+        auto& validMotion() { return TimerStat<void>::instance(); }
+        auto& nearest1() { return TimerStat<void>::instance(); }
+        auto& nearestK() { return TimerStat<void>::instance(); }
     };
 
     template <>
@@ -132,10 +122,10 @@ namespace unc::robotics::mpt::impl::prrt_star {
         mutable TimerStat<> nearest1_;
         mutable TimerStat<> nearestK_;
 
-        std::size_t& iterations() const { return iterations_; }
-        std::size_t& biasedSamples() const { return biasedSamples_; }
-        std::size_t& rewireTests() const { return rewireTests_; }
-        std::size_t& rewireCount() const { return rewireCount_; }
+        void iteration() const { ++iterations_; };
+        void biasedSample() const { ++biasedSamples_; }
+        void rewireTests(std::size_t n) const { rewireTests_ += n; }
+        void rewireCount() const { ++rewireCount_; }
         TimerStat<>& validMotion() const { return validMotion_; }
         TimerStat<>& nearest1() const { return nearest1_; }
         TimerStat<>& nearestK() const { return nearestK_; }
@@ -403,7 +393,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
                     MPT_LOG(TRACE) << "using scaled goal bias of " << scaledBias;
 
                     while (!done()) {
-                        ++Stats::iterations();
+                        Stats::iteration();
                         // if ((Clock::now() - planner.solveStartTime_) > nextProgress) {
                         //     MPT_LOG(TRACE) << "size = " << planner.size() << ", biased samples = " << Stats::biasedSamples();
                         //     nextProgress += 1s;
@@ -412,7 +402,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
                         if (planner.goalCount_.load(std::memory_order_relaxed) >= 1)
                             goto unbiasedSamplingLoop;
                         if (uniform01(rng_) < planner.goalBias_) {
-                            ++Stats::biasedSamples();
+                            Stats::biasedSample();
                             addSample(planner, goalSampler(rng_));
                         } else {
                             addSample(planner, sampler(rng_));
@@ -424,7 +414,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
           unbiasedSamplingLoop:
             while (!done()) {
-                ++Stats::iterations();
+                Stats::iteration();
                 addSample(planner, sampler(rng_));
             }
 
@@ -436,10 +426,9 @@ namespace unc::robotics::mpt::impl::prrt_star {
                 addSample(planner, *sample);
         }
 
-        template <typename Stat, typename ... Args>
-        decltype(auto) nearest(Planner& planner, Stat& stat, Args&& ... args) {
-            Timer timer(stat);
-            return planner.nn_.nearest(std::forward<Args>(args)...);
+        decltype(auto) nearest(Planner& planner, const State& q) {
+            Timer timer(Stats::nearest1());
+            return planner.nn_.nearest(q);
         }
 
         void addSample(Planner& planner, State newState) {
@@ -449,7 +438,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
             // only be empty if the nn structure is empty,
             // which it will not be, because the planner's
             // solve checks first. (but we assert anyways)
-            auto [nearNode, dNear] = nearest(planner, Stats::nearest1(), newState).value();
+            auto [nearNode, dNear] = nearest(planner, newState).value();
 
             // avoid adding the same state multiple times.  Unfortunately
             // this check is not sufficient, and may need to be updated.
@@ -487,9 +476,12 @@ namespace unc::robotics::mpt::impl::prrt_star {
             // planner.maxDistance_, but only in the k-nearest
             // variant.  Their restiction seems incorrect for
             // asymptotic optimality.
-            nearest(planner, Stats::nearestK(), nbh_, newState, k /*, planner.maxDistance_ */);
+            {
+                Timer timer(Stats::nearestK());
+                planner.nn_.nearest(nbh_, newState, k /*, planner.maxDistance_ */);
+            }
 
-            Stats::rewireTests() += nbh_.size();
+            Stats::rewireTests(nbh_.size());
             linkIndices_.resize(nbh_.size());
             for (std::size_t i=0 ; i<nbh_.size() ; ++i)
                 linkIndices_[i] = { std::get<Node*>(nbh_[i])->link(std::memory_order_relaxed), i };
@@ -575,7 +567,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
         template <bool checkEnd>
         bool validMotion(const State& a, const State& b) {
             Timer timer(Stats::validMotion());
-
+            
             if (checkEnd && !scenario_.valid(b))
                 return false;
 
@@ -584,7 +576,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
         void nonConcurrentPushUpdate(Planner& planner, Link* link, Distance delta) {
             assert(!concurrent && delta > 0);
-            ++Stats::rewireCount();
+            Stats::rewireCount();
             if (link->node()->goal()) {
                 Link *prevSolution = planner.solution_;
                 if (link == prevSolution) {

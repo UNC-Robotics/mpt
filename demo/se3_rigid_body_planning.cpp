@@ -272,12 +272,14 @@ void solve(const Options& options, const mpt_demo::ScenarioConfig<>& config) {
     using Threads = single_threaded;
 #endif
 
+    static constexpr bool reportStats = true;
+
     std::vector<std::string> robotMeshes{{robotMesh}};
     if (options.algorithm_ == kRRTStarAlgorithm) {
-        using Algorithm = PRRTStar<report_stats<true>, NN, Threads>;
+        using Algorithm = PRRTStar<report_stats<reportStats>, NN, Threads>;
         runPlanner<Scenario, Algorithm>(options, config, envMesh, robotMeshes, qStart, qGoal, volumeMin, volumeMax);
     } else if (options.algorithm_ == kRRTAlgorithm) {
-        using Algorithm = PRRT<report_stats<true>, NN, Threads>;
+        using Algorithm = PRRT<report_stats<reportStats>, NN, Threads>;
         runPlanner<Scenario, Algorithm>(options, config, envMesh, robotMeshes, qStart, qGoal, volumeMin, volumeMax);
     } else if (options.algorithm_ == kPRMAlgorithm) {
         // using Algorithm = PPRM<report_stats<true>, NN, Threads>;

@@ -61,7 +61,7 @@ namespace unc::robotics::mpt::impl {
         static const std::pair<typename Clock::duration, unsigned> overhead = computeClockOverhead<Clock>();
         return overhead;
     }
-
+    
     template <typename C = std::chrono::steady_clock>
     class TimerStat {
     public:
@@ -146,20 +146,36 @@ namespace unc::robotics::mpt::impl {
         }
     };
 
-    template <typename Stat>
-    class Timer {
-        using Clock = typename Stat::Clock;
+    // TimerStat placeholder specialization for when something does
+    // not wish to spend time tracking stats.
+    template <>
+    class TimerStat<void> {
+    public:
+        static TimerStat<void>& instance() {
+            static TimerStat<void> t;
+            return t;
+        }
+    };
 
+    // Specialized base class for Timer.  The specialization allows
+    // for void timers to carry no overhead.
+    template <typename Stat>
+    class TimerImpl;
+
+    template <typename Clock>
+    class TimerImpl<TimerStat<Clock>> {
+        using Stat = TimerStat<Clock>;
+        
         Stat& stat_;
         typename Clock::time_point start_{Clock::now()};
 
     public:
-        Timer(Stat& stat)
+        TimerImpl(Stat& stat)
             : stat_(stat)
         {
         }
 
-        ~Timer() {
+        ~TimerImpl() {
             stat_ += elapsed();
         }
 
@@ -168,7 +184,20 @@ namespace unc::robotics::mpt::impl {
         }
     };
 
+    template <>
+    class TimerImpl<TimerStat<void>> {
+    public:
+        TimerImpl(TimerStat<void>) {}
+    };
 
+
+    // Timer provides RAII for timing a code block's execution time.
+    template <typename Stat>
+    class Timer : public TimerImpl<Stat> {
+        using Base = TimerImpl<Stat>;
+    public:
+        Timer(Stat& stat) : Base(stat) {}
+    };
 }
 
 #endif

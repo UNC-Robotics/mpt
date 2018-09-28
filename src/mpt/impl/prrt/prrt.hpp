@@ -60,6 +60,10 @@ namespace unc::robotics::mpt::impl::prrt {
 
     template <>
     struct WorkerStats<false> {
+        void countIteration() const {}
+        void countBiasedSample() const {}
+        auto& validMotion() { return TimerStat<void>::instance(); }
+        auto& nearest() { return TimerStat<void>::instance(); }
     };
 
     template <>
