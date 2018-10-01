@@ -20,14 +20,15 @@ The scenario in `nao_cup_planning.cpp` demonstrates using MPT to plan motions fo
 
 This planner loads and solves [OMPL.app](http://ompl.kavrakilab.org/gui.html)'s rigid body planning scenarios.  If you haven't already, downloaded and try out OMPL!  To use these demos specify the name of the configuration file on the command line, for example, to solve (`-S`) the alpha-1.5 problem using RRT (`-a rrt`), use:
 
-     build/se3_rigid_body_planning-kd-double-mt path-to-ompl/resources -S -a rrt path-to-omplapp/resources/3D/alpha-1.5.cfg
+     build/se3_rigid_body_planning-kd-double-mt -S -a rrt path-to-omplapp/resources/3D/alpha-1.5.cfg
 
 Note: this demo shows MPT's capabilities and can be used to compare between algorithms within MPT.  It should NOT be used to compare between OMPL and MPT.  There are a number of difference between OMPL and MPT making benchmarking OMPL vs MPT through this inaccurate and inappropriate.  To name a few differences: interpolation during collision detection, sampling approaches, algorithm constants and defaults, and well as basic algorithm structures.  To do a fair comparison, one would have to control for all these factors.
 
 # Requirements
 
 * C++ 17 compiler (such as [GCC 8](https://gcc.gnu.org/) or [clang 6](https://clang.llvm.org/))
-* The [ninja](https://ninja-build.org/) build system
+* [CMake](https://cmake.org/)
+* The [ninja](https://ninja-build.org/) build system (optional, but recommended)
 * [Eigen 3](http://eigen.tuxfamily.org) linear algebra library
 * [Nigh](https://github.com/UNC-Robotics/nigh) concurrent nearest neighbors library
 * [FCL](https://github.com/flexible-collision-library/fcl) (and transitive dependency [CCD](https://github.com/danfis/libccd)) collision detection
@@ -49,7 +50,7 @@ Unfortunately older variants of Ubuntu do not tend to include up-to-date compile
 
 ## Install Dependencies on OSX with MacPorts
 
-    sudo port install ninja eigen3 ccd assimp
+    sudo port install cmake ninja eigen3 ccd assimp libomp
 
 The clang included with OSX/Xcode may be based upon an older version of clang and not work.  Install the latest version from macports, and 'select' it as the default:
 
@@ -67,26 +68,46 @@ Alternately, use a GNU compiler:
 
 This homebrew is not tested, but the following (or something similar is likely to work).  Feedback on this section is welcome!
 
-    brew tap ninja eigen3 ccd assimp
+    brew install cmake ninja eigen3 ccd assimp libomp
+
+To try out the latest clang compiler, use:
+
+    brew install llvm
+
+## Install FCL from Master
+
+The [FCL](https://github.com/flexible-collision-library/fcl) library included with some package managers is old and incompatible with the demos.  To get the demos compiling, clone and install the latest version from GitHub.
+
+    git clone https://github.com/flexible-collision-library/fcl.git
+    git checkout f15ffc
+    mkdir -p build/Release
+    cd build/Release
+    cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../..
+    ninja
+
+(Note: "-G Ninja" is optional, but much faster.  If left out, replace final "ninja" command with "make")
+
+To install, run:
+
+    sudo ninja install
+
+(Replace `ninja` with `make` if not using `-G ninja`)
 
 # Building
 
 The build is a two-step process. The first step generates a build script for ninja, and the second builds everything with ninja.  The result of the build is placed in the `build` subfolder.
 
-    ./configure.sh
+    mkdir -p build/Release
+    cd build/Release
+    CXX=clang++ CC=clang cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../..
     ninja
 
-To use a different C++ compiler, define the `CXX` variable before running `./configure.sh`, e.g.,
+Specifying "CXX" and "CC" before `cmake` are optional if the default compiler supports C++ 17.  If you are using GNU compilers, change to "CXX=g++" and "CC=gcc".
 
-    CXX=clang++ ./configure.sh
+Similarly, using "-G Ninja" is optional too.
 
 # Troubleshooting
 
-If your compiler complains about OpenMP, omp, or similar, use:
+## Cannot find FCL include file
 
-    CFLAGS="-fopenmp -O3 -march=native" ./configure.sh
-
-This may be combined with CXX setting, e.g.
-
-    CXX=clang++ CFLAGS="-fopenmp -O3 -march=native" ./configure.sh
-
+If the build cannot find an FCL include file, then check: (1) that you are using the latest version of FCL (it is possible that CMake detected an older version in a different path), (2) that CMake's invocation of pkg-config can find version of FCL that you installed from source.  The later requires setting `PKG_CONFIG_PATH=/usr/local/lib/pkgconfig` before invoking `cmake`.
