@@ -1,19 +1,23 @@
 # Unit Tests for MPT
 
-Running the unit tests requires [ninja](https://ninja-build.org/).  The build system assumes that [Nigh](https://github.com/UNC-Robotics/nigh) is checked out at the same directory level as `mpt`.
+Running the unit tests requires [CMake](https://cmake.org/). The build assumes that [Nigh](https://github.com/UNC-Robotics/nigh) is checked out at the same directory level as `mpt`.  Use the following commands to build (we assume the ninja build system is available):
 
-    % ./configure.sh
+    % mkdir build
+    % cmake -G Ninja ..
     % ninja
 
-Test classes are in `*_test.cpp` files.  The `./configure.sh` script finds files that match this pattern and generates the build rules to run the tests.  Whenever a new test is added the script will have to be run again.
+## Troubleshooting
 
-Some `./configure.sh` script behaviors can be overridden with environment variables.  To set the C++ compiler, use the `CXX` environment variable.  To set the flags the compile will use, set the `CFLAGS` environment variable.   Here are a few examples:
+### Xcode + macOS + C++17
 
-To generate a build file that will use clang++ and compile in debug symbols:
+The compiler included with macOS's Xcode does not appear to support all of C++17 without first upgrading to Mohave (macOS 10.14).  Because there are also issues with getting OpenMP to work with this compiler, we recommend using a different compiler.  See next tip.
 
-    % CXX=clang++ CFLAGS=-g ./configure.sh
+### Xcode + macOS + OpenMP
 
-To generate a build file that will use g++ using the default compiler flags:
+The compiler included with macOS's Xcode supports OpenMP, but requires extra flags that CMake doesn't appear to be able to add.  We recommend using a custom install of `clang` (version 5+) or `gcc` (version 7+)  and `libomp` using either MacPorts or Homebrew. Then make sure that cmake uses the right compiler:
 
-    % CXX=g++ ./configure.sh
+    % mkdir build
+    % cd build
+    % CXX=/path/to/clang++ CC=/path/to/clang cmake -G Ninja ..
+    % ninja
 
