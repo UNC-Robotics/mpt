@@ -39,6 +39,7 @@
 #include <mpt/box_bounds.hpp>
 #include <mpt/prrt.hpp>
 #include <mpt/prrt_star.hpp>
+#include <mpt/pprm.hpp>
 #include <mpt/goal_state.hpp>
 #include <memory>
 #include <getopt.h>
@@ -186,7 +187,9 @@ int runPlanner(int solveTimeMillis, int nodeCount, bool terminateWhenSolved) {
     //Clock::duration maxSolveTime = 10s;
     // planner.solve([start] { return Clock::now() - start >= maxSolveTime; });
     // planner.setRange(2.5);
-    planner.setGoalBias(0.01);
+
+    // setGoalBias is not available on all planners
+    // planner.setGoalBias(0.01);
 
     auto start = Clock::now();
     if (solveTimeMillis > 0) {
@@ -294,6 +297,9 @@ int main(int argc, char *argv[]) {
         return runPlanner<S, Algorithm>(solveTimeMillis, nodeCount, terminateWhenSolved);
     } else if (algorithm == "rrtstar") {
         using Algorithm = PRRTStar<report_stats<reportStats>, Threads, NN>;
+        return runPlanner<S, Algorithm>(solveTimeMillis, nodeCount, terminateWhenSolved);
+    } else if (algorithm == "prm") {
+        using Algorithm = PPRM<report_stats<reportStats>, Threads, NN>;
         return runPlanner<S, Algorithm>(solveTimeMillis, nodeCount, terminateWhenSolved);
     } else {
         MPT_LOG(ERROR) << "algorithm invalid: " << algorithm;

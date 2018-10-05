@@ -40,12 +40,16 @@
 #include <type_traits>
 
 namespace unc::robotics::mpt {
+    // option for most planners to optionally enable recording and
+    // reporting of statistics.
     template <bool report>
     struct report_stats : std::bool_constant<report> {};
 
+    // For RRT*-type planners, this selects the nearest neighbor
+    // strategy to use: k-nearest or radius-based nearest.
     struct rewire_k_nearest {};
     struct rewire_r_nearest {};
-
+    
     template <int threadCount>
     struct max_threads {
         // note: we're leaving threadCount as a signed integer since
