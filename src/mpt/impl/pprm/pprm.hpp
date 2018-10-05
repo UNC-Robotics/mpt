@@ -127,9 +127,6 @@ namespace unc::robotics::mpt::impl::pprm {
             workers_[0].addSample(*this, State(std::forward<Args>(args)...), Component::kGoal);
         }
 
-        // required to get convenience methods
-        using Base::solve;
-
         // required method
         template <typename DoneFn>
         std::enable_if_t<std::is_same_v<bool, std::result_of_t<DoneFn()>>>
