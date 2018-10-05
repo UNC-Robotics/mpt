@@ -62,7 +62,7 @@ namespace unc::robotics::mpt::impl::pprm {
             update(a, b);
         }
 
-        std::size_t size() const {
+        inline std::size_t size() const {
             return size_;
         }
 
