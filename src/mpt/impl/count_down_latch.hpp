@@ -34,61 +34,51 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_WORKER_POOL_HPP
-#define MPT_IMPL_WORKER_POOL_HPP
+#ifndef MPT_IMPL_COUNT_DOWN_LATCH_HPP
+#define MPT_IMPL_COUNT_DOWN_LATCH_HPP
 
-#include "../log.hpp"
-#include <utility>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 namespace unc::robotics::mpt::impl {
-    template <typename T, int maxThreads = 0, typename Allocator = std::allocator<T>>
-    class WorkerPool;
 
-    // specialization for 1 thread
-    template <typename T, typename Allocator>
-    class WorkerPool<T, 1, Allocator> {
-        T worker_;
+    // Synchronization primitive which blocks the wait() method until
+    // a pre-specified number of countDown() calls are made.
+    class CountDownLatch {
+        std::atomic<int> count_;
+
+        // unfortunately this seems to be the method to have one
+        // thread sleep and be awaken by the other.  We don't really
+        // need a mutex since our state fits in an atomic, but
+        // condition variables require a mutex.
+        mutable std::mutex mutex_;
+        mutable std::condition_variable cv_;
+        
     public:
-        WorkerPool(WorkerPool&& other)
-            : worker_(std::move(other))
+        inline CountDownLatch(int n)
+            : count_(n)
         {
+            assert(n >= 0);
         }
 
-        template <typename ... Args>
-        WorkerPool(const Args& ... args)
-            : worker_(0, args...)
-        {
+        inline void countDown() {
+            int before = count_.fetch_sub(1, std::memory_order_relaxed);
+
+            // fetch_sub returns the value before subtraction, if we
+            // already reached 0, then this is an extra call to
+            // countDown().
+            assert(before != 0);
+            
+            if (before == 1)
+                cv_.notify_all();
         }
 
-        unsigned size() const {
-            return 1;
-        }
-
-        T& operator[] (std::size_t i) {
-            assert(i == 0);
-            return worker_;
-        }
-
-        const T& operator[] (std::size_t i) const {
-            assert(i == 0);
-            return worker_;
-        }
-
-        template <typename Context, typename DoneFn>
-        void solve(Context& context, const DoneFn& doneFn) {
-            // TODO exceptions
-            MPT_LOG(INFO) << "solving with 1 thread";
-            worker_.solve(context, doneFn);
+        inline void wait() const {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cv_.wait(lock, [&] { return count_.load(std::memory_order_relaxed) == 0; });
         }
     };
 }
-
-#if MPT_USE_OPENMP && MPT_USE_STD_THREAD
-#  error "MPT_USE_OPENMP and MPT_USE_STD_THREAD are mutually exclusive"
-#elif MPT_USE_OPENMP || (defined(_OPENMP) && !MPT_USE_STD_THREAD)
-#  include "worker_pool_openmp.hpp"
-#else
-#  include "worker_pool_std_thread.hpp"
-#endif
 
 #endif
