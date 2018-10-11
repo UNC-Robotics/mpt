@@ -126,6 +126,9 @@ namespace mpt_test {
 
         using State = Eigen::Matrix<Scalar, dim, 1>;
 
+        // the following block outputs an svg file with the graph from
+        // the plan.
+#if 0
         std::ofstream out("test_output.svg");
         
         struct Visitor {
@@ -156,6 +159,7 @@ namespace mpt_test {
         out <<
             "</g>\n"
             "</svg>";
+#endif
         
         EXPECT(planner.solved()) == true;
     }
