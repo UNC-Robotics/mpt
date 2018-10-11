@@ -34,81 +34,72 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_WORKER_POOL_HPP
-#define MPT_IMPL_WORKER_POOL_HPP
+#ifndef MPT_IMPL_PPRM_IRS_COMPONENT_HPP
+#define MPT_IMPL_PPRM_IRS_COMPONENT_HPP
 
-#include "../log.hpp"
-#include <utility>
+#include <atomic>
 
-namespace unc::robotics::mpt::impl {
-    template <typename T, int maxThreads = 0, typename Allocator = std::allocator<T>>
-    class WorkerPool;
-
-    // specialization for 1 thread
-    template <typename T, typename Allocator>
-    class WorkerPool<T, 1, Allocator> {
-        T worker_;
+namespace unc::robotics::mpt::impl::pprm_irs {
+    class Component {
     public:
-        using value_type = T;
-        using iterator = T*;
-        using const_iterator = const T*;
+        enum Flags : unsigned char {
+            kNone = 0,
+            kStart = 1,
+            kGoal = 2,
+            kSolution = kStart | kGoal
+        };
+
+    private:
+        std::size_t size_;
+        Flags flags_;
+        std::atomic<Component*> next_{nullptr};
         
-        WorkerPool(WorkerPool&& other)
-            : worker_(std::move(other))
+    public:
+        Component(std::size_t size, Flags flags)
+            : size_(size), flags_(flags)
         {
         }
 
-        template <typename ... Args>
-        WorkerPool(const Args& ... args)
-            : worker_(0, args...)
-        {
+        inline Component(Component *a, Component *b) {
+            update(a, b);
         }
 
-        unsigned size() const {
-            return 1;
+        inline void update(Component *a, Component *b) {
+            size_ = a->size_ + b->size_;
+            flags_ = static_cast<Flags>(a->flags_ | b->flags_);
         }
 
-        T& operator[] (std::size_t i) {
-            assert(i == 0);
-            return worker_;
-        }
-
-        const T& operator[] (std::size_t i) const {
-            assert(i == 0);
-            return worker_;
-        }
-
-        template <typename Context, typename DoneFn>
-        void solve(Context& context, const DoneFn& doneFn) {
-            // TODO exceptions
-            MPT_LOG(INFO) << "solving with 1 thread";
-            worker_.solve(context, doneFn);
-        }
-
-        auto begin() {
-            return &worker_;
+        inline std::size_t size() const {
+            return size_;
         }
         
-        auto end() {
-            return &worker_ + 1;
+        inline Component *next() {
+            Component *next = next_.load(std::memory_order_acquire);
+            if (next != nullptr) {
+                if (Component *n = next->next()) {
+                    next_.compare_exchange_strong(next, n, std::memory_order_relaxed);
+                    return n;
+                }
+            }
+            return next;
         }
 
-        auto begin() const {
-            return &worker_;
+        inline bool casNext(Component*& expect, Component *value, std::memory_order order) {
+            return next_.compare_exchange_strong(expect, value, order);
         }
-        
-        auto end() const {
-            return &worker_ + 1;
+
+        inline bool isGoal() {
+            return (flags_ & kGoal) != 0;
+        }
+
+        inline bool isStart() {
+            return (flags_ & kStart) != 0;
+        }
+
+        inline bool isSolution() {
+            return flags_ == kSolution;
         }
     };
 }
-
-#if MPT_USE_OPENMP && MPT_USE_STD_THREAD
-#  error "MPT_USE_OPENMP and MPT_USE_STD_THREAD are mutually exclusive"
-#elif MPT_USE_OPENMP || (defined(_OPENMP) && !MPT_USE_STD_THREAD)
-#  include "worker_pool_openmp.hpp"
-#else
-#  include "worker_pool_std_thread.hpp"
-#endif
 
 #endif

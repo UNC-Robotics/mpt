@@ -34,39 +34,34 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_PPRM_PLANNER_HPP
-#define MPT_IMPL_PPRM_PLANNER_HPP
+#ifndef MPT_IMPL_PPRM_IRS_PLANNER_HPP
+#define MPT_IMPL_PPRM_IRS_PLANNER_HPP
 
 #include "component.hpp"
 #include "node.hpp"
 #include "edge.hpp"
+#include "shortest_path_check.hpp"
 #include "../planner_base.hpp"
-#include "../scenario_space.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
 #include "../scenario_goal.hpp"
-#include "../goal_has_sampler.hpp"
 #include "../worker_pool.hpp"
-#include "../object_pool.hpp"
-#include "../../goal_sampler.hpp"
+#include "../goal_has_sampler.hpp"
 #include "../../random_device_seed.hpp"
-#include <mutex>
-#include <atomic>
+#include "../object_pool.hpp"
 #include <forward_list>
-#include <set>
-#include <unordered_map>
+#include <vector>
 
-namespace unc::robotics::mpt::impl::pprm {
-
-    template <typename Scenario, int maxThreads, bool reportStats, typename NNStrategy>
-    class PPRM : public PlannerBase<PPRM<Scenario, maxThreads, reportStats, NNStrategy>> {
-        using Planner = PPRM;
-        using Base = PlannerBase<PPRM>;
+namespace unc::robotics::mpt::impl::pprm_irs {
+    template <typename Scenario, int maxThreads, bool keepDense, bool reportStats, typename NNStrategy>
+    class PPRMIRS : public PlannerBase<PPRMIRS<Scenario, maxThreads, keepDense, reportStats, NNStrategy>> {
+        using Planner = PPRMIRS;
+        using Base = PlannerBase<Planner>;
         using Space = scenario_space_t<Scenario>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Node = pprm::Node<State, Distance>;
-        using Edge = pprm::Edge<State, Distance>;
+        using Node = pprm_irs::Node<State, Distance, keepDense>;
+        using Edge = pprm_irs::Edge<State, Distance, keepDense>;
         using RNG = scenario_rng_t<Scenario, Distance>;
         using Sampler = scenario_sampler_t<Scenario, RNG>;
 
@@ -78,21 +73,18 @@ namespace unc::robotics::mpt::impl::pprm {
         WorkerPool<Worker, maxThreads> workers_;
         std::atomic_bool solved_{false};
 
+        Distance stretchWeight_{5};
         Distance kRRG_;
 
         std::mutex mutex_;
         std::forward_list<Node*> startNodes_;
         std::set<const Node*> goalNodes_;
 
-        // TODO: add to stats:
-        // std::atomic_uint componentCount_{0};
-
         void foundGoal(Node *node) {
             // TODO: if there are a lot of goals, then this could
             // become a concurrency bottleneck.  We can replace it
             // with a lock-free linked list.
             MPT_LOG(TRACE) << "found goal";
-            assert(node->component()->isGoal());
             std::lock_guard<std::mutex> lock(mutex_);
             goalNodes_.insert(node);
         }
@@ -105,7 +97,7 @@ namespace unc::robotics::mpt::impl::pprm {
 
     public:
         template <typename RNGSeed = RandomDeviceSeed<>>
-        PPRM(const Scenario& scenario = Scenario(), const RNGSeed& seed = RNGSeed())
+        PPRMIRS(const Scenario& scenario = Scenario(), const RNGSeed& seed = RNGSeed())
             : nn_(scenario.space())
             , workers_(scenario, seed)
             , kRRG_(E<Distance> + E<Distance> / scenario.space().dimensions())
@@ -118,11 +110,17 @@ namespace unc::robotics::mpt::impl::pprm {
             return nn_.size();
         }
 
+        // Sets the stretch weight.  It may be okay to change this
+        // while another thread (group) is solving, but the behavior
+        // is not specified.
+        void setStretchWeight(Distance w) {
+            stretchWeight_ = w;
+        }
+
         template <typename ... Args>
         void addStart(Args&& ... args) {
             Node *n = workers_[0].addSample(*this, State(std::forward<Args>(args)...), Component::kStart);
 
-            assert(n->component()->isStart());
             std::lock_guard<std::mutex> lock(mutex_);
             startNodes_.push_front(n);
         }
@@ -180,8 +178,8 @@ namespace unc::robotics::mpt::impl::pprm {
                     std::reverse(path.begin(), path.end());
                     break;
                 }
-
-                for (const Edge *e = min->edges() ; e ; e = e->next()) {
+                
+                for (const Edge *e = min->sparseHead(std::memory_order_acquire) ; e ; e = e->next(std::memory_order_acquire)) {
                     Distance d = dMin + workers_[0].space().distance(min->state(), e->to()->state());
                     auto dBest = nodeInfo.find(e->to());
                     if (dBest == nodeInfo.end()) {
@@ -199,7 +197,6 @@ namespace unc::robotics::mpt::impl::pprm {
 
         void printStats() const {
             MPT_LOG(INFO) << "nodes in graph: " << nn_.size();
-            // MPT_LOG(INFO) << "component count: " << componentCount_.load();
         }
 
         template <typename Visitor>
@@ -209,8 +206,8 @@ namespace unc::robotics::mpt::impl::pprm {
         }
     };
 
-    template <typename Scenario, int maxThreads, bool reportStats, typename NNStrategy>
-    class PPRM<Scenario, maxThreads, reportStats, NNStrategy>::Worker {
+    template <typename Scenario, int maxThreads, bool keepDense, bool reportStats, typename NNStrategy>
+    class PPRMIRS<Scenario, maxThreads, keepDense, reportStats, NNStrategy>::Worker {
         unsigned no_;
         Scenario scenario_;
         RNG rng_;
@@ -220,6 +217,8 @@ namespace unc::robotics::mpt::impl::pprm {
         ObjectPool<Component> componentPool_;
 
         std::vector<std::tuple<Distance, Node*>> nbh_;
+
+        ShortestPathCheck<Space, keepDense> shortestPathCheck_;
 
     public:
         Worker(Worker&& other)
@@ -275,41 +274,55 @@ namespace unc::robotics::mpt::impl::pprm {
             }
 
             Component *component = componentPool_.allocate(1, flags);
-            // ++planner.componentCount_;
             Node *n = nodePool_.allocate(component, q);
 
             if (isGoal)
                 planner.foundGoal(n);
 
+            // Reset the shortest path check since all neighbors start
+            // from the same source point in our search and we can
+            // reuse information from one check to the next.
+            shortestPathCheck_.reset(n);
+            
             for (auto [d, nbr] : nbh_) {
                 if (!validMotion(q, nbr->state()))
                     continue;
 
-                Component *c0 = nbr->addEdge(edgePool_.allocate(n, d));
-                Component *c1 = n->addEdge(edgePool_.allocate(nbr, d));
-                Component *cm = merge(planner, c0, c1);
-
-                if (cm->isSolution())
-                    planner.solutionFound();
+                addEdge(planner, n, nbr, d);
             }
 
             planner.nn_.insert(n);
             return n;
         }
 
-        Component *merge(Planner& planner, Component *a, Component *b) {
+        void addEdge(Planner& planner, Node* from, Node *to, Distance d) {
+            Distance stretchDist = planner.stretchWeight_ * d;
+            if (shortestPathCheck_(from, to, stretchDist, scenario_.space())) {
+                // sparse
+                from->addSparseEdge(edgePool_.allocate(to, d));
+                to->addSparseEdge(edgePool_.allocate(from, d));
+            } else if constexpr (keepDense) {
+                from->addDenseEdge(edgePool_.allocate(to, d));
+                to->addDenseEdge(edgePool_.allocate(from, d));
+            } else {
+                return;
+            }
+
+            Component *cm = merge(from->component(), to->component());
+            if (cm->isSolution())
+                planner.solutionFound();
+        }
+
+        Component *merge(Component *a, Component *b) {
             Component *t;
             do {
                 while ((t = a->next()) != nullptr) a = t;
                 while ((t = b->next()) != nullptr) b = t;
-                if (a == b) return a; // same component already
+                if (a == b) return a;
                 if (a->size() > b->size())
                     std::swap(a, b);
                 assert(t == nullptr);
             } while (!a->casNext(t, b, std::memory_order_relaxed));
-            
-            // component merged
-            // --planner.componentCount_;
 
             Component *m = componentPool_.allocate(a, b);
             while (!b->casNext(t, m, std::memory_order_relaxed)) {
@@ -340,7 +353,8 @@ namespace unc::robotics::mpt::impl::pprm {
         void visitGraph(Visitor&& visitor) const {
             for (const Node& n : nodePool_) {
                 visitor.vertex(n.state());
-                for (const Edge *e = n.edges() ; e ; e = e->next())
+                for (const Edge *e = n.sparseHead(std::memory_order_acquire) ; e ;
+                     e = e->next(std::memory_order_relaxed))
                     visitor.edge(e->to()->state());
             }
         }

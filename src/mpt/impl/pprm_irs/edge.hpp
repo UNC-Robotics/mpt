@@ -34,34 +34,58 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_PLANNER_TAGS_HPP
-#define MPT_PLANNER_TAGS_HPP
+#ifndef MPT_IMPL_PPRM_IRS_EDGE_HPP
+#define MPT_IMPL_PPRM_IRS_EDGE_HPP
 
-#include <type_traits>
+#include <atomic>
 
-namespace unc::robotics::mpt {
-    // option for most planners to optionally enable recording and
-    // reporting of statistics.
-    template <bool report>
-    struct report_stats : std::bool_constant<report> {};
+namespace unc::robotics::mpt::impl::pprm_irs {
 
-    // For RRT*-type planners, this selects the nearest neighbor
-    // strategy to use: k-nearest or radius-based nearest.
-    struct rewire_k_nearest {};
-    struct rewire_r_nearest {};
+    template <typename State, typename Distance, bool keepDense>
+    class Node;
     
-    template <int threadCount>
-    struct max_threads {
-        // note: we're leaving threadCount as a signed integer since
-        // we may later give negative numbers special meaning.
-        // Currently only '0' has special meaning.
-        static_assert(threadCount >= 0, "thread count must be non-negative");
-    };
-    using single_threaded = max_threads<1>;
-    using hardware_concurrency = max_threads<0>;
+    template <typename State, typename Distance, bool keepDense>
+    class Edge {
+        using Node = pprm_irs::Node<State, Distance, keepDense>;
 
-    template <bool keep>
-    struct keep_dense_edges : std::bool_constant<keep> {};
+        Node *to_;
+        Distance distance_;
+        std::atomic<Edge*> next_;
+
+    public:
+        Edge(Node* to, Distance dist)
+            : to_(to)
+            , distance_(dist)
+        {
+        }
+
+        void setNext(Edge *next, std::memory_order order) {
+            next_.store(next, order);
+        }
+
+        const Edge* next(std::memory_order order) const {
+            return next_.load(order);
+        }
+
+        Distance distance() const {
+            return distance_;
+        }
+
+        const Node* to() const {
+            return to_;
+        }
+    };
+
+    template <typename Edge>
+    static void linkEdge(std::atomic<Edge*>& head, Edge *edge) {
+        Edge* oldHead = head.load(std::memory_order_relaxed);
+        do {
+            edge->setNext(oldHead, std::memory_order_relaxed);
+        } while (head.compare_exchange_weak(
+                     oldHead, edge,
+                     std::memory_order_release,
+                     std::memory_order_relaxed));
+    }
 }
 
 #endif

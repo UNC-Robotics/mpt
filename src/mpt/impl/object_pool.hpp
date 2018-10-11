@@ -88,6 +88,9 @@ namespace unc::robotics::mpt::impl {
             Base::emplace_back(std::forward<Args>(args)...);
             return &Base::back();
         }
+
+        using Base::begin;
+        using Base::end;
     };
 
     // The non-block-allocated specialization for ObjectPool currently
@@ -112,6 +115,8 @@ namespace unc::robotics::mpt::impl {
             return &Base::front();
         }
 
+        using Base::begin;
+        using Base::end;
     };
 }
 

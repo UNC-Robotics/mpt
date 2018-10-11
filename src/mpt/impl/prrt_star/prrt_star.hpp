@@ -322,7 +322,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return path;
         }
 
-        void printStats() {
+        void printStats() const {
             MPT_LOG(INFO) << "nodes in graph: " << nn_.size();
             if constexpr (reportStats) {
                 WorkerStats<true> stats;
@@ -330,6 +330,26 @@ namespace unc::robotics::mpt::impl::prrt_star {
                     stats += workers_[i];
                 stats.print();
             }
+        }
+
+    private:
+        template <typename Visitor, typename Nodes>
+        void visitNodes(Visitor&& visitor, const Nodes& nodes) const {
+            for (const Node& n : nodes) {
+                visitor.vertex(n.state());
+                if (const Link *link = n.link(std::memory_order_acquire))
+                    if (const Link *parent = link->parent())
+                        if (const Node *e = parent->node())
+                            visitor.edge(e->state());
+            }
+        }
+        
+    public:
+        template <typename Visitor>
+        void visitGraph(Visitor&& visitor) const {
+            visitNodes(std::forward<Visitor>(visitor), startNodes_);
+            for (const Worker& w : workers_)
+                visitNodes(std::forward<Visitor>(visitor), w.nodes());
         }
     };
 
@@ -367,6 +387,10 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
         decltype(auto) space() const {
             return scenario_.space();
+        }
+
+        const auto& nodes() const {
+            return nodes_;
         }
 
         template <typename DoneFn>

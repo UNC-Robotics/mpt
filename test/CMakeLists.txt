@@ -40,7 +40,7 @@ foreach(file ${files})
     # that it depends on the test executable.
     add_custom_command(
         OUTPUT  ${test_name}.log
-        COMMAND ${test_name} | tee ${test_name}.log
+        COMMAND ${test_name} | tee ${test_name}.tmp && mv ${test_name}.tmp ${test_name}.log
         DEPENDS ${test_name}
         COMMENT "TESTING ${test_name}")
 

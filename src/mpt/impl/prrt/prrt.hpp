@@ -233,6 +233,24 @@ namespace unc::robotics::mpt::impl::prrt {
                 stats.print();
             }
         }
+
+    private:
+        template <typename Visitor, typename Nodes>
+        void visitNodes(Visitor&& visitor, const Nodes& nodes) const {
+            for (const Node& n : nodes) {
+                visitor.vertex(n.state());
+                if (n.parent())
+                    visitor.edge(n.parent()->state());
+            }
+        }
+
+    public:
+        template <typename Visitor>
+        void visitGraph(Visitor&& visitor) const {
+            visitNodes(std::forward<Visitor>(visitor), startNodes_);
+            for (const Worker& w : workers_)
+                visitNodes(std::forward<Visitor>(visitor), w.nodes());
+        }
     };
 
     template <typename Scenario, int maxThreads, bool reportStats, typename NNStrategy>
@@ -266,8 +284,12 @@ namespace unc::robotics::mpt::impl::prrt {
 
         // decltype(auto) to allow both 'Space' and 'const Space&'
         // return types.
-        decltype(auto) space() const{
+        decltype(auto) space() const {
             return scenario_.space();
+        }
+
+        const auto& nodes() const {
+            return nodePool_;
         }
 
         template <typename DoneFn>

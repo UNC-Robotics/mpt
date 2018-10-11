@@ -118,6 +118,22 @@ namespace unc::robotics::mpt::impl {
                 latch.wait();
             }
         }
+
+        auto begin() {
+            return workers_.begin();
+        }
+        
+        auto end() {
+            return workers_.end();
+        }
+        
+        auto begin() const {
+            return workers_.begin();
+        }
+        
+        auto end() const {
+            return workers_.end();
+        }
     };
 }
 

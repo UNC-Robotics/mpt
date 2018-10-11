@@ -53,6 +53,10 @@ namespace unc::robotics::mpt::impl {
         std::atomic_bool solving_{false};
 
     public:
+        using value_type = T;
+        using iterator = typename std::vector<T, Allocator>::iterator;
+        using cosnt_iterator = typename std::vector<T, Allocator>::const_iterator;
+        
         WorkerPool(WorkerPool&& other)
             : workers_(std::move(other.workers_))
         {
@@ -131,6 +135,22 @@ namespace unc::robotics::mpt::impl {
         // const T& operator() const {
         //     return workers_[omp_get_thread_num()];
         // }
+
+        auto begin() {
+            return workers_.begin();
+        }
+        
+        auto end() {
+            return workers_.end();
+        }
+        
+        auto begin() const {
+            return workers_.begin();
+        }
+        
+        auto end() const {
+            return workers_.end();
+        }
     };
 }
 
