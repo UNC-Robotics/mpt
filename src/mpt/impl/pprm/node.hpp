@@ -40,14 +40,14 @@
 #include <atomic>
 
 namespace unc::robotics::mpt::impl::pprm {
-    template <typename State, typename Distance>
+    template <typename State, typename Distance, typename Traj>
     class Edge;
 
-    template <typename State, typename Distance>
+    template <typename State, typename Distance, typename Traj>
     class Node {
         State state_;
         std::atomic<Component*> component_;
-        std::atomic<Edge<State,Distance>*> edges_;
+        std::atomic<Edge<State, Distance, Traj>*> edges_;
     public:
         template <typename ... Args>
         Node(Component *component, Args&& ... args)
@@ -61,7 +61,7 @@ namespace unc::robotics::mpt::impl::pprm {
             return state_;
         }
 
-        const Edge<State, Distance>* edges() const {
+        const Edge<State, Distance, Traj>* edges() const {
             return edges_.load(std::memory_order_acquire);
         }
 
@@ -74,8 +74,8 @@ namespace unc::robotics::mpt::impl::pprm {
             return c;
         }
 
-        Component* addEdge(Edge<State, Distance> *edge) {
-            Edge<State, Distance> *head = edges_.load(std::memory_order_relaxed);
+        Component* addEdge(Edge<State, Distance, Traj> *edge) {
+            Edge<State, Distance, Traj> *head = edges_.load(std::memory_order_relaxed);
             do {
                 edge->setNext(head, std::memory_order_relaxed);
             } while (edges_.compare_exchange_weak(
@@ -87,8 +87,8 @@ namespace unc::robotics::mpt::impl::pprm {
     };
 
     struct NodeKey {
-        template <typename State, typename Distance>
-        const State& operator() (const Node<State, Distance>* n) const {
+        template <typename State, typename Distance, typename Traj>
+        const State& operator() (const Node<State, Distance, Traj>* n) const {
             return n->state();
         }
     };

@@ -37,37 +37,95 @@
 #ifndef MPT_IMPL_PPRM_EDGE_HPP
 #define MPT_IMPL_PPRM_EDGE_HPP
 
+#include "../scenario_link_store.hpp"
 #include <atomic>
 
 namespace unc::robotics::mpt::impl::pprm {
-    template <typename State, typename Distance>
+    template <typename State, typename Distance, typename Traj>
     class Node;
 
-    template <typename State, typename Distance>
+    template <typename State, typename Distance, typename Traj>
+    class EdgePair;
+
+    template <typename State, typename Distance, typename Traj>
     class Edge {
-        Node<State, Distance> *to_;
-        Distance distance_;
-        std::atomic<Edge*> next_;
+        using Node = pprm::Node<State, Distance, Traj>;
+        using EdgePair = pprm::EdgePair<State, Distance, Traj>;
+        
+        Node *to_;
+        EdgePair *pair_;
+        std::atomic<Edge*> next_{nullptr};
 
     public:
-        Edge(Node<State, Distance>* to, Distance dist)
+        Edge(Node *to, EdgePair *pair)
             : to_(to)
-            , distance_(dist)
+            , pair_(pair)
         {
         }
 
-        void setNext(Edge* next, std::memory_order order) {
-            next_.store(next, order);
+        Distance distance() const {
+            return pair_->distance();
         }
 
-        const Node<State, Distance>* to() const {
+        const Node* to() const {
             return to_;
         }
 
-        const Edge* next() const {
-            return next_.load(std::memory_order_acquire);
+        const Node* from() const {
+            return pair_->other(this)->to_;
+        }
+        
+        void setNext(Edge *next, std::memory_order order) {
+            assert(next == nullptr || next->from() == from());
+            next_.store(next, order);
+        }
+
+        const Edge* next(std::memory_order order) const {
+            return next_.load(order);
+        }
+        
+    };
+    
+    template <typename State, typename Distance, typename Traj>
+    class EdgePair : ScenarioLinkStore<Traj> {
+        using Node = pprm::Node<State, Distance, Traj>;
+        using Edge = pprm::Edge<State, Distance, Traj>;
+
+        Distance distance_;
+        std::array<Edge, 2> pair_;
+
+    public:
+        EdgePair(Node *from, Node* to, Distance dist, Traj&& traj)
+            : ScenarioLinkStore<Traj>(std::move(traj))
+            , distance_(dist)
+            , pair_{{{from, this}, {to, this}}}
+        {
+        }
+
+        Edge* get(int i) {
+            return &pair_[i];
+        }
+
+        Distance distance() const {
+            return distance_;
+        }
+
+        const Edge* other(const Edge* half) const {
+            assert(half == &pair_[0] || half == &pair_[1]);
+            return &pair_[half == &pair_[0]];
         }
     };
+
+    template <typename Edge>
+    static void linkEdge(std::atomic<Edge*>& head, Edge *edge) {
+        Edge* oldHead = head.load(std::memory_order_relaxed);
+        do {
+            edge->setNext(oldHead, std::memory_order_relaxed);
+        } while (head.compare_exchange_weak(
+                     oldHead, edge,
+                     std::memory_order_release,
+                     std::memory_order_relaxed));
+    }
 }
 
 #endif

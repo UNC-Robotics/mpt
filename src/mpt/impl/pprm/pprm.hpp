@@ -40,14 +40,15 @@
 #include "component.hpp"
 #include "node.hpp"
 #include "edge.hpp"
+#include "../goal_has_sampler.hpp"
+#include "../object_pool.hpp"
 #include "../planner_base.hpp"
-#include "../scenario_space.hpp"
+#include "../scenario_goal.hpp"
+#include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
-#include "../scenario_goal.hpp"
-#include "../goal_has_sampler.hpp"
+#include "../scenario_space.hpp"
 #include "../worker_pool.hpp"
-#include "../object_pool.hpp"
 #include "../../goal_sampler.hpp"
 #include "../../random_device_seed.hpp"
 #include <mutex>
@@ -65,8 +66,10 @@ namespace unc::robotics::mpt::impl::pprm {
         using Space = scenario_space_t<Scenario>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Node = pprm::Node<State, Distance>;
-        using Edge = pprm::Edge<State, Distance>;
+        using Traj = scenario_link_t<Scenario>;
+        using Node = pprm::Node<State, Distance, Traj>;
+        using Edge = pprm::Edge<State, Distance, Traj>;
+        using EdgePair = pprm::EdgePair<State, Distance, Traj>;
         using RNG = scenario_rng_t<Scenario, Distance>;
         using Sampler = scenario_sampler_t<Scenario, RNG>;
 
@@ -181,7 +184,7 @@ namespace unc::robotics::mpt::impl::pprm {
                     break;
                 }
 
-                for (const Edge *e = min->edges() ; e ; e = e->next()) {
+                for (const Edge *e = min->edges() ; e ; e = e->next(std::memory_order_acquire)) {
                     Distance d = dMin + workers_[0].space().distance(min->state(), e->to()->state());
                     auto dBest = nodeInfo.find(e->to());
                     if (dBest == nodeInfo.end()) {
@@ -216,7 +219,7 @@ namespace unc::robotics::mpt::impl::pprm {
         RNG rng_;
 
         ObjectPool<Node> nodePool_;
-        ObjectPool<Edge> edgePool_;
+        ObjectPool<EdgePair> edgePool_;
         ObjectPool<Component> componentPool_;
 
         std::vector<std::tuple<Distance, Node*>> nbh_;
@@ -282,15 +285,15 @@ namespace unc::robotics::mpt::impl::pprm {
                 planner.foundGoal(n);
 
             for (auto [d, nbr] : nbh_) {
-                if (!validMotion(q, nbr->state()))
-                    continue;
+                if (auto traj = validMotion(q, nbr->state())) {
+                    EdgePair *pair = edgePool_.allocate(n, nbr, d, std::move(traj));
+                    Component *c0 = nbr->addEdge(pair->get(0));
+                    Component *c1 = n->addEdge(pair->get(1));
+                    Component *cm = merge(planner, c0, c1);
 
-                Component *c0 = nbr->addEdge(edgePool_.allocate(n, d));
-                Component *c1 = n->addEdge(edgePool_.allocate(nbr, d));
-                Component *cm = merge(planner, c0, c1);
-
-                if (cm->isSolution())
-                    planner.solutionFound();
+                    if (cm->isSolution())
+                        planner.solutionFound();
+                }
             }
 
             planner.nn_.insert(n);
@@ -320,7 +323,7 @@ namespace unc::robotics::mpt::impl::pprm {
             return m;
         }
 
-        bool validMotion(const State& a, const State& b) {
+        decltype(auto) validMotion(const State& a, const State& b) {
             return scenario_.link(a, b);
         }
 
