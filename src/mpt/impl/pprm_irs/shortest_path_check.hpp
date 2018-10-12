@@ -44,12 +44,12 @@
 #include <vector>
 
 namespace unc::robotics::mpt::impl::pprm_irs {
-    template <typename Space, bool keepDense>
+    template <typename Space, typename Traj, bool keepDense>
     class ShortestPathCheck {
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Node = pprm_irs::Node<State, Distance, keepDense>;
-        using Edge = pprm_irs::Edge<State, Distance, keepDense>;
+        using Node = pprm_irs::Node<State, Distance, Traj, keepDense>;
+        using Edge = pprm_irs::Edge<State, Distance, Traj, keepDense>;
 
         using Iteration = unsigned;
         

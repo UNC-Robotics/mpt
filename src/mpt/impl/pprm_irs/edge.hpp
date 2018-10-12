@@ -37,21 +37,22 @@
 #ifndef MPT_IMPL_PPRM_IRS_EDGE_HPP
 #define MPT_IMPL_PPRM_IRS_EDGE_HPP
 
+#include "../scenario_link_store.hpp"
 #include <array>
 #include <atomic>
 
 namespace unc::robotics::mpt::impl::pprm_irs {
 
-    template <typename State, typename Distance, bool keepDense>
+    template <typename State, typename Distance, typename Traj, bool keepDense>
     class Node;
 
-    template <typename State, typename Distance, bool keepDense>
+    template <typename State, typename Distance, typename Traj, bool keepDense>
     class EdgePair;
 
-    template <typename State, typename Distance, bool keepDense>
+    template <typename State, typename Distance, typename Traj, bool keepDense>
     class Edge {
-        using Node = pprm_irs::Node<State, Distance, keepDense>;
-        using EdgePair = pprm_irs::EdgePair<State, Distance, keepDense>;
+        using Node = pprm_irs::Node<State, Distance, Traj, keepDense>;
+        using EdgePair = pprm_irs::EdgePair<State, Distance, Traj, keepDense>;
         
         Node *to_;
         EdgePair *pair_;
@@ -87,17 +88,18 @@ namespace unc::robotics::mpt::impl::pprm_irs {
         
     };
     
-    template <typename State, typename Distance, bool keepDense>
-    class EdgePair {
-        using Node = pprm_irs::Node<State, Distance, keepDense>;
-        using Edge = pprm_irs::Edge<State, Distance, keepDense>;
+    template <typename State, typename Distance, typename Traj, bool keepDense>
+    class EdgePair : ScenarioLinkStore<Traj> {
+        using Node = pprm_irs::Node<State, Distance, Traj, keepDense>;
+        using Edge = pprm_irs::Edge<State, Distance, Traj, keepDense>;
 
         Distance distance_;
         std::array<Edge, 2> pair_;
 
     public:
-        EdgePair(Node *from, Node* to, Distance dist)
-            : distance_(dist)
+        EdgePair(Node *from, Node* to, Distance dist, Traj&& traj)
+            : ScenarioLinkStore<Traj>(std::move(traj))
+            , distance_(dist)
             , pair_{{{from, this}, {to, this}}}
         {
         }

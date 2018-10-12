@@ -41,14 +41,15 @@
 #include "node.hpp"
 #include "edge.hpp"
 #include "shortest_path_check.hpp"
+#include "../goal_has_sampler.hpp"
+#include "../object_pool.hpp"
 #include "../planner_base.hpp"
+#include "../scenario_goal.hpp"
+#include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
-#include "../scenario_goal.hpp"
 #include "../worker_pool.hpp"
-#include "../goal_has_sampler.hpp"
 #include "../../random_device_seed.hpp"
-#include "../object_pool.hpp"
 #include <forward_list>
 #include <vector>
 
@@ -60,9 +61,10 @@ namespace unc::robotics::mpt::impl::pprm_irs {
         using Space = scenario_space_t<Scenario>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Node = pprm_irs::Node<State, Distance, keepDense>;
-        using Edge = pprm_irs::Edge<State, Distance, keepDense>;
-        using EdgePair = pprm_irs::EdgePair<State, Distance, keepDense>;
+        using Traj = scenario_link_t<Scenario>;
+        using Node = pprm_irs::Node<State, Distance, Traj, keepDense>;
+        using Edge = pprm_irs::Edge<State, Distance, Traj, keepDense>;
+        using EdgePair = pprm_irs::EdgePair<State, Distance, Traj, keepDense>;
         using RNG = scenario_rng_t<Scenario, Distance>;
         using Sampler = scenario_sampler_t<Scenario, RNG>;
 
@@ -219,7 +221,7 @@ namespace unc::robotics::mpt::impl::pprm_irs {
 
         std::vector<std::tuple<Distance, Node*>> nbh_;
 
-        ShortestPathCheck<Space, keepDense> shortestPathCheck_;
+        ShortestPathCheck<Space, Traj, keepDense> shortestPathCheck_;
 
     public:
         Worker(Worker&& other)
@@ -285,26 +287,23 @@ namespace unc::robotics::mpt::impl::pprm_irs {
             // reuse information from one check to the next.
             shortestPathCheck_.reset(n);
             
-            for (auto [d, nbr] : nbh_) {
-                if (!validMotion(q, nbr->state()))
-                    continue;
-
-                addEdge(planner, n, nbr, d);
-            }
+            for (auto [d, nbr] : nbh_)
+                if (auto link = validMotion(q, nbr->state()))
+                    addEdge(planner, n, nbr, d, std::move(link));
 
             planner.nn_.insert(n);
             return n;
         }
 
-        void addEdge(Planner& planner, Node* from, Node *to, Distance d) {
+        void addEdge(Planner& planner, Node* from, Node *to, Distance d, Traj&& traj) {
             Distance stretchDist = planner.stretchWeight_ * d;
             if (shortestPathCheck_(from, to, stretchDist, scenario_.space())) {
                 // sparse
-                EdgePair *pair = edgePool_.allocate(from, to, d);
+                EdgePair *pair = edgePool_.allocate(from, to, d, std::move(traj));
                 from->addSparseEdge(pair->get(1));
                 to->addSparseEdge(pair->get(0));
             } else if constexpr (keepDense) {
-                EdgePair *pair = edgePool_.allocate(from, to, d);
+                EdgePair *pair = edgePool_.allocate(from, to, d, std::move(traj));
                 from->addDenseEdge(pair->get(1));
                 to->addDenseEdge(pair->get(0));
             } else {
@@ -336,7 +335,7 @@ namespace unc::robotics::mpt::impl::pprm_irs {
             return m;
         }
 
-        bool validMotion(const State& a, const State& b) {
+        decltype(auto) validMotion(const State& a, const State& b) {
             return scenario_.link(a, b);
         }
 

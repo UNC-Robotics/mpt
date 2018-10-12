@@ -41,9 +41,9 @@
 #include <atomic>
 
 namespace unc::robotics::mpt::impl::pprm_irs {
-    template <typename State, typename Distance, bool keepDense>
+    template <typename State, typename Distance, typename Traj, bool keepDense>
     class NodeBase {
-        using Edge = pprm_irs::Edge<State, Distance, keepDense>;
+        using Edge = pprm_irs::Edge<State, Distance, Traj, keepDense>;
         State state_;
         
         std::atomic<Component*> component_;
@@ -79,23 +79,23 @@ namespace unc::robotics::mpt::impl::pprm_irs {
         }
     };
 
-    template <typename State, typename Distance, bool keepDense>
+    template <typename State, typename Distance, typename Traj, bool keepDense>
     class Node;
 
-    template <typename State, typename Distance>
-    class Node<State, Distance, false> : public NodeBase<State, Distance, false> {
+    template <typename State, typename Distance, typename Traj>
+    class Node<State, Distance, Traj, false> : public NodeBase<State, Distance, Traj, false> {
     public:
-        using NodeBase<State, Distance, false>::NodeBase;
+        using NodeBase<State, Distance, Traj, false>::NodeBase;
     };
 
-    template <typename State, typename Distance>
-    class Node<State, Distance, true> : public NodeBase<State, Distance, true> {
-        using Edge = pprm_irs::Edge<State, Distance, true>;
+    template <typename State, typename Distance, typename Traj>
+    class Node<State, Distance, Traj, true> : public NodeBase<State, Distance, Traj, true> {
+        using Edge = pprm_irs::Edge<State, Distance, Traj, true>;
         
         std::atomic<Edge*> denseHead_{nullptr};
         
     public:
-        using NodeBase<State, Distance, true>::NodeBase;
+        using NodeBase<State, Distance, Traj, true>::NodeBase;
 
         void addDenseEdge(Edge *edge) {
             linkEdge(denseHead_, edge);
@@ -103,8 +103,8 @@ namespace unc::robotics::mpt::impl::pprm_irs {
     };
 
     struct NodeKey {
-        template <typename State, typename Distance, bool concurrent>
-        const State& operator() (const Node<State, Distance, concurrent>* node) const {
+        template <typename State, typename Distance, typename Traj, bool concurrent>
+        const State& operator() (const Node<State, Distance, Traj, concurrent>* node) const {
             return node->state();
         }
     };
