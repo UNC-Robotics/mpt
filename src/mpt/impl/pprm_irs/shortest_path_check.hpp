@@ -167,7 +167,10 @@ namespace unc::robotics::mpt::impl::pprm_irs {
                 // have a pathCost less than the distance target, and
                 // we're done.
                 bool found = (top == v);
-                for (const Edge *edge = top->sparseHead(std::memory_order_acquire) ; edge ; edge = edge->next(std::memory_order_acquire)) {
+                for (const Edge *edge = top->sparseHead(std::memory_order_acquire) ;
+                     edge != nullptr ;
+                     edge = edge->next(std::memory_order_acquire))
+                {
                     const Node *nbr = edge->to();
                     Distance d = pathCost + edge->distance();
 

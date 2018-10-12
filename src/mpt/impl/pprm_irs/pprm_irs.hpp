@@ -62,6 +62,7 @@ namespace unc::robotics::mpt::impl::pprm_irs {
         using Distance = typename Space::Distance;
         using Node = pprm_irs::Node<State, Distance, keepDense>;
         using Edge = pprm_irs::Edge<State, Distance, keepDense>;
+        using EdgePair = pprm_irs::EdgePair<State, Distance, keepDense>;
         using RNG = scenario_rng_t<Scenario, Distance>;
         using Sampler = scenario_sampler_t<Scenario, RNG>;
 
@@ -213,7 +214,7 @@ namespace unc::robotics::mpt::impl::pprm_irs {
         RNG rng_;
 
         ObjectPool<Node> nodePool_;
-        ObjectPool<Edge> edgePool_;
+        ObjectPool<EdgePair> edgePool_;
         ObjectPool<Component> componentPool_;
 
         std::vector<std::tuple<Distance, Node*>> nbh_;
@@ -299,11 +300,13 @@ namespace unc::robotics::mpt::impl::pprm_irs {
             Distance stretchDist = planner.stretchWeight_ * d;
             if (shortestPathCheck_(from, to, stretchDist, scenario_.space())) {
                 // sparse
-                from->addSparseEdge(edgePool_.allocate(to, d));
-                to->addSparseEdge(edgePool_.allocate(from, d));
+                EdgePair *pair = edgePool_.allocate(from, to, d);
+                from->addSparseEdge(pair->get(1));
+                to->addSparseEdge(pair->get(0));
             } else if constexpr (keepDense) {
-                from->addDenseEdge(edgePool_.allocate(to, d));
-                to->addDenseEdge(edgePool_.allocate(from, d));
+                EdgePair *pair = edgePool_.allocate(from, to, d);
+                from->addDenseEdge(pair->get(1));
+                to->addDenseEdge(pair->get(0));
             } else {
                 return;
             }

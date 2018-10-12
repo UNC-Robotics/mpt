@@ -37,42 +37,82 @@
 #ifndef MPT_IMPL_PPRM_IRS_EDGE_HPP
 #define MPT_IMPL_PPRM_IRS_EDGE_HPP
 
+#include <array>
 #include <atomic>
 
 namespace unc::robotics::mpt::impl::pprm_irs {
 
     template <typename State, typename Distance, bool keepDense>
     class Node;
-    
+
+    template <typename State, typename Distance, bool keepDense>
+    class EdgePair;
+
     template <typename State, typename Distance, bool keepDense>
     class Edge {
         using Node = pprm_irs::Node<State, Distance, keepDense>;
-
+        using EdgePair = pprm_irs::EdgePair<State, Distance, keepDense>;
+        
         Node *to_;
-        Distance distance_;
-        std::atomic<Edge*> next_;
+        EdgePair *pair_;
+        std::atomic<Edge*> next_{nullptr};
 
     public:
-        Edge(Node* to, Distance dist)
+        Edge(Node *to, EdgePair *pair)
             : to_(to)
-            , distance_(dist)
+            , pair_(pair)
         {
         }
 
+        Distance distance() const {
+            return pair_->distance();
+        }
+
+        const Node* to() const {
+            return to_;
+        }
+
+        const Node* from() const {
+            return pair_->other(this)->to_;
+        }
+        
         void setNext(Edge *next, std::memory_order order) {
+            assert(next == nullptr || next->from() == from());
             next_.store(next, order);
         }
 
         const Edge* next(std::memory_order order) const {
             return next_.load(order);
         }
+        
+    };
+    
+    template <typename State, typename Distance, bool keepDense>
+    class EdgePair {
+        using Node = pprm_irs::Node<State, Distance, keepDense>;
+        using Edge = pprm_irs::Edge<State, Distance, keepDense>;
+
+        Distance distance_;
+        std::array<Edge, 2> pair_;
+
+    public:
+        EdgePair(Node *from, Node* to, Distance dist)
+            : distance_(dist)
+            , pair_{{{from, this}, {to, this}}}
+        {
+        }
+
+        Edge* get(int i) {
+            return &pair_[i];
+        }
 
         Distance distance() const {
             return distance_;
         }
 
-        const Node* to() const {
-            return to_;
+        const Edge* other(const Edge* half) const {
+            assert(half == &pair_[0] || half == &pair_[1]);
+            return &pair_[half == &pair_[0]];
         }
     };
 
