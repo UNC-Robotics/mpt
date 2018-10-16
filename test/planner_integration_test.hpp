@@ -207,7 +207,7 @@ namespace mpt_test {
         planner.solution([&] (const State& a) {
             EXPECT(*sit++ == a) == true;
         });
-        
+        EXPECT(sit == solution.end()) == true;
         
         // the following block outputs an svg file with the graph from
         // the plan.
