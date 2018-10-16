@@ -74,7 +74,7 @@ namespace unc::robotics::mpt::impl {
     //   steering lead to a different value than the second argument
     //   of link.
     template <typename T>
-    struct is_valid_link<std::optional<T>> : std::true_type {};    
+    struct is_valid_link<std::optional<T>> : std::true_type {};
     
     // T*, std::shared_ptr<T>, std::unique_ptr<T>, std::weak_ptr<T>
     //
@@ -97,7 +97,17 @@ namespace unc::robotics::mpt::impl {
 
     template <typename T>
     static constexpr bool is_valid_link_v = is_valid_link<T>::value;
-    
+
+
+    template <typename T>
+    T&& derefLink(std::optional<T>&& link) {
+        return std::move(link).get();
+    }
+
+    template <typename T>
+    decltype(auto) derefLink(T&& link) {
+        return std::forward<T>(link);
+    }
     
     template <class T, class = void>
     struct scenario_link {

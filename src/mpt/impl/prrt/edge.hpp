@@ -34,43 +34,35 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_PRRT_NODE_HPP
-#define MPT_IMPL_PRRT_NODE_HPP
+#ifndef MPT_IMPL_PRRT_EDGE_HPP
+#define MPT_IMPL_PRRT_EDGE_HPP
 
-#include "edge.hpp"
+#include "../link.hpp"
 #include <utility>
 
 namespace unc::robotics::mpt::impl::prrt {
     template <typename State, typename Traj>
-    class Node {
-        State state_;
-        Edge<State, Traj> parent_;
-
+    class Node;
+    
+    template <typename State, typename Traj>
+    class Edge : public Link<Traj> {
+        using Node = prrt::Node<State, Traj>;
+        
+        Node *to_;
+        
     public:
-        template <typename ... Args>
-        Node(Traj&& traj, Node *parent, Args&& ... args)
-            : state_(std::forward<Args>(args)...)
-            , parent_(std::move(traj), parent)
+        Edge(Traj&& traj, Node* to)
+            : Link<Traj>(std::move(traj))
+            , to_(to)
         {
         }
 
-        const State& state() const {
-            return state_;
+        operator Node* () {
+            return to_;
         }
 
-        const Edge<State, Traj>& edge() const {
-            return parent_;
-        }
-
-        const Node* parent() const {
-            return parent_;
-        }
-    };
-
-    struct NodeKey {
-        template <typename State, typename Traj>
-        const State& operator() (const Node<State, Traj>* node) const {
-            return node->state();
+        operator const Node* () const {
+            return to_;
         }
     };
 }

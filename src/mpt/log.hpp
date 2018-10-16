@@ -77,8 +77,12 @@ namespace unc::robotics::mpt::log::detail {
     template <typename T> struct is_duration : std::false_type {};
     template <class R, class P> struct is_duration<std::chrono::duration<R, P>> : std::true_type {};
 
-    template <std::intmax_t value>
-    constexpr std::intmax_t log10 = (value > 1 ? log10<value/10> + 1 : 0);
+    template <typename T>
+    constexpr T log10(T value) {
+        return (value > 1 ? log10(value/10) + 1 : 0);
+    }
+    // template <std::intmax_t value>
+    // constexpr std::intmax_t log10 = (value > 1 ? log10<value/10> + 1 : 0);
 
     class ThreadName {
         std::string name_;
@@ -392,7 +396,7 @@ namespace unc::robotics::mpt::log {
                 // route keeps precision, and may be faster.
                 msg_ << d.count() / static_cast<Rep>(Period::den) << '.';
                 auto oldFill = msg_.fill('0');
-                auto oldWidth = msg_.width(detail::log10<Period::den>);
+                auto oldWidth = msg_.width(detail::log10(Period::den));
                 auto oldPos = msg_.setf(std::ios_base::right, std::ios_base::adjustfield);
                 msg_ << d.count() % Period::den;
                 msg_.fill(oldFill);

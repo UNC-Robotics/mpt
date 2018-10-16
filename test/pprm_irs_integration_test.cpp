@@ -37,3 +37,11 @@ TEST(pprm_irs_options_parser) {
     EXPECT((std::is_same_v<A, B>)) == true;
 }
 
+TEST(pprm_irs_with_trajectory) {
+    testSolvingTrajectoryScenario<PPRMIRS<>>();
+}
+#if 0
+TEST(pprm_irs_with_shared_trajectory) {
+    testSolvingSharedTrajectoryScenario<PPRMIRS<>>();
+}
+#endif

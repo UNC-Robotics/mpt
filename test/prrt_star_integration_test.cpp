@@ -36,3 +36,11 @@ TEST(prrt_star_options_parser) {
     using B = mpt::Planner<Scenario, PRRTStar<single_threaded, report_stats<true>, nigh::Linear>>;
     EXPECT((std::is_same_v<A, B>)) == true;
 }
+
+TEST(prrt_star_with_trajectory) {
+    testSolvingTrajectoryScenario<PRRTStar<>>();
+}
+
+TEST(prrt_star_with_shared_trajectory) {
+    testSolvingSharedTrajectoryScenario<PRRTStar<>>();
+}

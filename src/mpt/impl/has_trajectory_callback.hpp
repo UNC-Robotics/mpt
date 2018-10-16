@@ -34,45 +34,32 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_PRRT_NODE_HPP
-#define MPT_IMPL_PRRT_NODE_HPP
+#ifndef MPT_IMPL_HAS_SOLUTION_CALLBACK_HPP
+#define MPT_IMPL_HAS_SOLUTION_CALLBACK_HPP
 
-#include "edge.hpp"
+#include <type_traits>
 #include <utility>
 
-namespace unc::robotics::mpt::impl::prrt {
-    template <typename State, typename Traj>
-    class Node {
-        State state_;
-        Edge<State, Traj> parent_;
+namespace unc::robotics::mpt::impl {
+    template <class Fn, class State, class Traj, class = void>
+    struct has_trajectory_callback : std::false_type {};
 
-    public:
-        template <typename ... Args>
-        Node(Traj&& traj, Node *parent, Args&& ... args)
-            : state_(std::forward<Args>(args)...)
-            , parent_(std::move(traj), parent)
-        {
-        }
+    // If link() returns bool, then we do not consider it a
+    // trajectory, and nothing is stored in the edge of graphs.
+    template <class Fn, class State>
+    struct has_trajectory_callback<Fn, State, bool, void> : std::false_type {};
 
-        const State& state() const {
-            return state_;
-        }
+    template <class Fn, class State, class Traj>
+    struct has_trajectory_callback<
+        Fn, State, Traj,
+        std::void_t<decltype( std::declval<Fn>().operator() (
+                                  std::declval<const State&>(),
+                                  std::declval<const Traj&>(),
+                                  std::declval<const State&>() ) )> >
+        : std::true_type {};
 
-        const Edge<State, Traj>& edge() const {
-            return parent_;
-        }
-
-        const Node* parent() const {
-            return parent_;
-        }
-    };
-
-    struct NodeKey {
-        template <typename State, typename Traj>
-        const State& operator() (const Node<State, Traj>* node) const {
-            return node->state();
-        }
-    };
+    template <class Fn, class State, class Traj>
+    constexpr bool has_trajectory_callback_v = has_trajectory_callback<Fn, State, Traj>::value;
 }
 
 #endif

@@ -38,8 +38,9 @@
 #define MPT_IMPL_COUNT_DOWN_LATCH_HPP
 
 #include <atomic>
-#include <mutex>
+#include <cassert>
 #include <condition_variable>
+#include <mutex>
 
 namespace unc::robotics::mpt::impl {
 

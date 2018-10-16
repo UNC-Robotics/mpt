@@ -37,12 +37,15 @@
 #ifndef MPT_IMPL_PRRT_PLANNER_HPP
 #define MPT_IMPL_PRRT_PLANNER_HPP
 
+#include "edge.hpp"
 #include "node.hpp"
 #include "../atom.hpp"
 #include "../goal_has_sampler.hpp"
+#include "../link_trajectory.hpp"
 #include "../object_pool.hpp"
 #include "../planner_base.hpp"
 #include "../scenario_goal.hpp"
+#include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
 #include "../scenario_space.hpp"
@@ -52,6 +55,7 @@
 #include "../../random_device_seed.hpp"
 #include <forward_list>
 #include <mutex>
+#include <utility>
 
 namespace unc::robotics::mpt::impl::prrt {
 
@@ -102,7 +106,10 @@ namespace unc::robotics::mpt::impl::prrt {
         using Space = scenario_space_t<Scenario>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Node = prrt::Node<State>;
+        using Link = scenario_link_t<Scenario>;
+        using Traj = link_trajectory_t<Link>;
+        using Node = prrt::Node<State, Traj>;
+        using Edge = prrt::Edge<State, Traj>;
         using RNG = scenario_rng_t<Scenario, Distance>;
         using Sampler = scenario_sampler_t<Scenario, RNG>;
 
@@ -173,7 +180,7 @@ namespace unc::robotics::mpt::impl::prrt {
         template <typename ... Args>
         void addStart(Args&& ... args) {
             std::lock_guard<std::mutex> lock(mutex_);
-            Node *node = startNodes_.allocate(nullptr, std::forward<Args>(args)...);
+            Node *node = startNodes_.allocate(Traj{}, nullptr, std::forward<Args>(args)...);
             // TODO: workers_[0].connect(node);
             nn_.insert(node);
         }
@@ -197,35 +204,90 @@ namespace unc::robotics::mpt::impl::prrt {
         }
 
     private:
-        Distance buildSolution(std::vector<State>& path, const Node *n) const {
+        std::pair<Distance, std::size_t> pathCost(const Node *n) const {
             Distance cost = 0;
-            for (const Node *p ;; n = p) {
-                path.push_back(n->state());
-                if ((p = n->parent()) == nullptr)
-                    return cost;
-                cost += workers_[0].space().distance(n->state(), p->state());
+            std::size_t size = 0;
+            if (n) {
+                ++size;
+                for (const Node *p ; (p = n->parent()) != nullptr ; n = p) {
+                    cost += workers_[0].space().distance(n->state(), p->state());
+                    ++size;
+                }
             }
+            return {cost, size};
+        }
+
+        std::pair<const Node*, std::size_t> bestSolution() const {
+            Distance bestCost = std::numeric_limits<Distance>::infinity();
+            std::size_t bestSize = 0;
+            const Node* bestGoal = nullptr;
+            for (const Node *goal : goals_) {
+                auto [cost, size] = pathCost(goal);
+                if (cost < bestCost || bestGoal == nullptr) {
+                    bestCost = cost;
+                    bestSize = size;
+                    bestGoal = goal;
+                }
+            }
+            return {bestGoal, bestSize};
+        }
+        
+        template <typename Fn>
+        std::enable_if_t< is_trajectory_callback_v< Fn, State, Traj> >
+        solutionRecur(const Node *node, Fn& fn) const {
+            if (const Node *p = node->parent()) {
+                solutionRecur(p, fn);
+                fn(p->state(), node->edge().link(), node->state(), true);
+            }
+        }
+
+        template <typename Fn>
+        std::enable_if_t< is_trajectory_reference_callback_v< Fn, State, Traj > >
+        solutionRecur(const Node *node, Fn& fn) const {
+            if (const Node *p = node->parent()) {
+                solutionRecur(p, fn);
+                fn(p->state(), *node->edge().link(), node->state(), true);
+            }
+        }
+
+        template <typename Fn>
+        std::enable_if_t< is_waypoint_callback_v< Fn, State, Traj > >
+        solutionRecur(const Node *node, Fn& fn) const {
+            if (const Node *p = node->parent())
+                solutionRecur(p, fn);
+            fn(node->state());
         }
 
     public:
         std::vector<State> solution() const {
-            std::vector<State> best;
-            std::vector<State> curr;
-            Distance shortest = std::numeric_limits<Distance>::infinity();
-            for (const Node *n : goals_) {
-                curr.clear();
-                Distance cost = buildSolution(curr, n);
-                if (cost < shortest) {
-                    std::swap(curr, best);
-                    shortest = cost;
-                }
+            auto [n, size] = bestSolution();
+            std::vector<State> path;
+            if (n) {
+                path.reserve(size);
+                do {
+                    path.push_back(n->state());
+                } while ((n = n->parent()) != nullptr);
+                std::reverse(path.begin(), path.end());
             }
-            std::reverse(best.begin(), best.end());
-            return best;
+            return path;
+        }
+
+        template <typename Fn>
+        void solution(Fn fn) const {
+            auto [goal, size] = bestSolution();
+            // Either call:
+            // fn(n)             size times
+            // or
+            // fn(n, traj, n)   (size-1) times
+            if (goal)
+                solutionRecur(goal, fn);
         }
 
         void printStats() const {
             MPT_LOG(INFO) << "nodes in graph: " << nn_.size();
+            auto [cost, size] = bestSolution();
+            MPT_LOG(INFO) << "solutions: " << goalCount_.load() << ", best cost=" << cost
+                          << " over " << size << " waypoints";
             if constexpr (reportStats) {
                 WorkerStats<true> stats;
                 for (unsigned i=0 ; i<workers_.size() ; ++i)
@@ -375,20 +437,19 @@ namespace unc::robotics::mpt::impl::prrt {
             if (!scenario_.valid(newState))
                 return;
 
-            if (!validMotion(nearNode->state(), newState))
-                return;
+            if (auto traj = validMotion(nearNode->state(), newState)) {
+                auto [isGoal, goalDist] = scenario_.goal()(scenario_.space(), newState);
+                (void)goalDist; // mark unused (for now, may be used in approx solutions)
 
-            auto [isGoal, goalDist] = scenario_.goal()(scenario_.space(), newState);
-            (void)goalDist; // mark unused (for now, may be used in approx solutions)
+                Node* newNode = nodePool_.allocate(linkTrajectory(traj), nearNode, newState);
+                planner.nn_.insert(newNode);
 
-            Node* newNode = nodePool_.allocate(nearNode, newState);
-            planner.nn_.insert(newNode);
-
-            if (isGoal)
-                planner.foundGoal(newNode);
+                if (isGoal)
+                    planner.foundGoal(newNode);
+            }
         }
 
-        bool validMotion(const State& a, const State& b) {
+        decltype(auto) validMotion(const State& a, const State& b) {
             Timer timer(Stats::validMotion());
             return scenario_.link(a, b);
         }

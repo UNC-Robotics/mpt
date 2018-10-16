@@ -34,48 +34,70 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_PRRT_STAR_LINK_HPP
-#define MPT_IMPL_PRRT_STAR_LINK_HPP
+#ifndef MPT_IMPL_PRRT_STAR_EDGE_HPP
+#define MPT_IMPL_PRRT_STAR_EDGE_HPP
 
+#include "edge_data.hpp"
 #include "node.hpp"
+#include "../link.hpp"
 #include <atomic>
 #include <cassert>
 
 namespace unc::robotics::mpt::impl::prrt_star {
-    template <typename State, typename Distance, bool concurrent>
-    class Link;
+    template <typename State, typename Distance, typename Traj, bool concurrent>
+    class Edge;
 
-    // Specialization of Link for concurrent RRT*
-    template <typename State, typename Distance>
-    class Link<State, Distance, true> {
-        using Node = prrt_star::Node<State, Distance, true>;
+    // Specialization of Edge for concurrent RRT*
+    template <typename State, typename Distance, typename Traj>
+    class Edge<State, Distance, Traj, true> : public EdgeData<Traj> {
+        using Base = EdgeData<Traj>;
+        using Node = prrt_star::Node<State, Distance, Traj, true>;
 
         Node *node_;
-        Link *parent_;
+        Edge *parent_;
         Distance cost_;
 
-        std::atomic<Link*> firstChild_{nullptr};
-        std::atomic<Link*> nextSibling_{nullptr};
+        std::atomic<Edge*> firstChild_{nullptr};
+        std::atomic<Edge*> nextSibling_{nullptr};
 
+        void addChild(Edge* child) {
+            Edge *next = firstChild_.load(std::memory_order_relaxed);
+            do {
+                child->nextSibling_.store(next, std::memory_order_relaxed);
+            } while (!firstChild_.compare_exchange_weak(
+                         next, child,
+                         std::memory_order_release,
+                         std::memory_order_relaxed));
+        }
+        
     public:
-        Link(const Link&) = delete;
-        Link(Link&&) = delete;
+        Edge(const Edge&) = delete;
+        Edge(Edge&&) = delete;
 
-        explicit Link(Node *node)
-            : node_(node), parent_(nullptr), cost_(0)
+        Edge(Traj&& traj, Node *node)
+            : Base(std::move(traj))
+            , node_(node)
+            , parent_(nullptr)
+            , cost_(0)
         {
         }
 
-        Link(Node *node, Link *parent, Distance cost)
-            : node_(node), parent_(parent), cost_(cost)
+        Edge(Traj&& traj, Node *node, Edge *parent, Distance cost)
+            : Base(std::move(traj))
+            , node_(node)
+            , parent_(parent)
+            , cost_(cost)
         {
-            Link *next = parent->firstChild_.load(std::memory_order_relaxed);
-            do {
-                nextSibling_.store(next, std::memory_order_relaxed);
-            } while (!parent->firstChild_.compare_exchange_weak(
-                         next, this,
-                         std::memory_order_release,
-                         std::memory_order_relaxed));
+            parent->addChild(this);
+        }
+
+        Edge(const Edge& old, Node *node, Edge *parent, Distance cost)
+            : Base(old)
+            , node_(node)
+            , parent_(parent)
+            , cost_(cost)
+        {
+            parent->addChild(this);
         }
 
         Node* node() {
@@ -90,51 +112,54 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return cost_;
         }
 
-        const Link *parent() const {
+        const Edge *parent() const {
             return parent_;
         }
 
-        Link *firstChild(std::memory_order order) {
+        Edge *firstChild(std::memory_order order) {
             return firstChild_.load(order);
         }
 
-        bool casFirstChild(Link*& expect, Link* value, std::memory_order success, std::memory_order failure) {
+        bool casFirstChild(Edge*& expect, Edge* value, std::memory_order success, std::memory_order failure) {
             return firstChild_.compare_exchange_weak(expect, value, success, failure);
         }
 
-        Link *nextSibling(std::memory_order order) {
+        Edge *nextSibling(std::memory_order order) {
             return nextSibling_.load(order);
         }
     };
 
-    // Specialization of Link for non-concurrent version of RRT*.  In
-    // the non-concurrent version, Nodes and Links are 1:1, so Links
+    // Specialization of Edge for non-concurrent version of RRT*.  In
+    // the non-concurrent version, Nodes and Edges are 1:1, so Edges
     // are stored in the Node instead of allocated separately.  To
     // store it in the node and make it easy to traverse between the
-    // two, Link is base class of Node.
-    template <typename State, typename Distance>
-    class Link<State, Distance, false> {
-        using Node = prrt_star::Node<State, Distance, false>;
+    // two, Edge is base class of Node.
+    template <typename State, typename Distance, typename Traj>
+    class Edge<State, Distance, Traj, false> : public Link<Traj> {
+        using Base = Link<Traj>;
+        using Node = prrt_star::Node<State, Distance, Traj, false>;
 
-        Link *parent_;
+        Edge *parent_;
         Distance cost_;
 
-        Link *firstChild_{nullptr};
-        Link *nextSibling_;
+        Edge *firstChild_{nullptr};
+        Edge *nextSibling_;
 
     protected:
-        Link(const Link&) = delete;
-        Link(Link&&) = delete;
+        Edge(const Edge&) = delete;
+        Edge(Edge&&) = delete;
 
-        Link()
-            : parent_(nullptr)
+        Edge()
+            : Base(Traj{})
+            , parent_(nullptr)
             , cost_(0)
-            , nextSibling_{nullptr}
+            , nextSibling_(nullptr)
         {
         }
 
-        Link(Link *parent, Distance cost)
-            : parent_(parent)
+        Edge(Traj&& traj, Edge *parent, Distance cost)
+            : Base(std::move(traj))
+            , parent_(parent)
             , cost_(cost)
             , nextSibling_(parent->firstChild_)
         {
@@ -159,26 +184,26 @@ namespace unc::robotics::mpt::impl::prrt_star {
             cost_ = cost;
         }
 
-        const Link *parent() const {
+        const Edge *parent() const {
             return parent_;
         }
 
-        void setParent(Link *newParent) {
+        void setParent(Edge *newParent) {
             assert(newParent != nullptr && newParent->cost() <= cost_ && newParent != parent_);
 
             // remove from old parent
             if (parent_ != nullptr) {
-                Link *c = parent_->firstChild_;
+                Edge *c = parent_->firstChild_;
                 if (c == this) {
                     // this node is the first child, remove it from
                     // the parent by updating the parent's chlid list
-                    // to start at the next link in the list.
+                    // to start at the next edge in the list.
                     parent_->firstChild_ = nextSibling_;
                 } else {
                     // since the old parent must contain the child, it
                     // is safe to leave out a nullptr check for end of
                     // list.
-                    Link *prev;
+                    Edge *prev;
                     while ((c = (prev = c)->nextSibling_) != this)
                         assert(c != nullptr);
                     prev->nextSibling_ = nextSibling_;
@@ -190,11 +215,11 @@ namespace unc::robotics::mpt::impl::prrt_star {
             newParent->firstChild_ = this;
         }
 
-        Link *firstChild(std::memory_order) {
+        Edge *firstChild(std::memory_order) {
             return firstChild_;
         }
 
-        Link *nextSibling(std::memory_order) {
+        Edge *nextSibling(std::memory_order) {
             return nextSibling_;
         }
     };

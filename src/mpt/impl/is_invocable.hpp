@@ -34,45 +34,22 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_PRRT_NODE_HPP
-#define MPT_IMPL_PRRT_NODE_HPP
+#ifndef MPT_IMPL_IS_INVOCABLE_HPP
+#define MPT_IMPL_IS_INVOCABLE_HPP
 
-#include "edge.hpp"
-#include <utility>
+#include <type_traits>
 
-namespace unc::robotics::mpt::impl::prrt {
-    template <typename State, typename Traj>
-    class Node {
-        State state_;
-        Edge<State, Traj> parent_;
+// clang 5 ships with libc++ that has is_callable instead of is_invocable
 
-    public:
-        template <typename ... Args>
-        Node(Traj&& traj, Node *parent, Args&& ... args)
-            : state_(std::forward<Args>(args)...)
-            , parent_(std::move(traj), parent)
-        {
-        }
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION == 5000
+namespace std {
+    template <typename Fn, typename ... Args>
+    using is_invocable = is_callable<Fn(Args...), void>;
 
-        const State& state() const {
-            return state_;
-        }
-
-        const Edge<State, Traj>& edge() const {
-            return parent_;
-        }
-
-        const Node* parent() const {
-            return parent_;
-        }
-    };
-
-    struct NodeKey {
-        template <typename State, typename Traj>
-        const State& operator() (const Node<State, Traj>* node) const {
-            return node->state();
-        }
-    };
+    template <typename Fn, typename ... Args>
+    constexpr bool is_invocable_v = is_invocable<Fn, Args...>::value;
 }
+#endif
+
 
 #endif

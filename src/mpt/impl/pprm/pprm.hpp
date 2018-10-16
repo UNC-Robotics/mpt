@@ -40,7 +40,9 @@
 #include "component.hpp"
 #include "node.hpp"
 #include "edge.hpp"
+#include "../djikstras.hpp"
 #include "../goal_has_sampler.hpp"
+#include "../link_trajectory.hpp"
 #include "../object_pool.hpp"
 #include "../planner_base.hpp"
 #include "../scenario_goal.hpp"
@@ -66,7 +68,8 @@ namespace unc::robotics::mpt::impl::pprm {
         using Space = scenario_space_t<Scenario>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Traj = scenario_link_t<Scenario>;
+        using Link = scenario_link_t<Scenario>;
+        using Traj = link_trajectory_t<Link>;
         using Node = pprm::Node<State, Distance, Traj>;
         using Edge = pprm::Edge<State, Distance, Traj>;
         using EdgePair = pprm::EdgePair<State, Distance, Traj>;
@@ -106,6 +109,34 @@ namespace unc::robotics::mpt::impl::pprm {
                 MPT_LOG(INFO) << "solution found";
         }
 
+        // Functor used by shortest path algorithm
+        struct Goal {
+            const std::set<const Node*>& goalNodes_;
+            
+            bool operator() (const Node* n) const {
+                return goalNodes_.count(n) > 0;
+            }
+            
+            bool operator() (const Edge* e) const {
+                return goalNodes_.count(e->to()) > 0;
+            }
+        };
+
+        // Functor used by shortest path algorithm
+        struct Edges {
+            template <typename Callback>
+            void operator() (const Node *from, Callback callback) const {
+                for (const Edge *e = from->edges() ; e ; e = e->next(std::memory_order_acquire))
+                    callback(e->distance(), e->to());
+            }
+            
+            template <typename Callback>
+            void operator() (const Edge *from, Callback callback) const {
+                for (const Edge *e = from->to()->edges() ; e ; e = e->next(std::memory_order_acquire))
+                    callback(e->distance(), e);
+            }
+        };
+
     public:
         template <typename RNGSeed = RandomDeviceSeed<>>
         PPRM(const Scenario& scenario = Scenario(), const RNGSeed& seed = RNGSeed())
@@ -126,6 +157,7 @@ namespace unc::robotics::mpt::impl::pprm {
             Node *n = workers_[0].addSample(*this, State(std::forward<Args>(args)...), Component::kStart);
 
             assert(n->component()->isStart());
+
             std::lock_guard<std::mutex> lock(mutex_);
             startNodes_.push_front(n);
         }
@@ -154,52 +186,59 @@ namespace unc::robotics::mpt::impl::pprm {
             return solved_.load(std::memory_order_relaxed);
         }
 
-        std::vector<State> solution() const {
-            using QItem = std::tuple<Distance, const Node*>;
-            auto compare = [] (const QItem& a, const QItem& b) { return std::get<0>(a) > std::get<0>(b); };
-            std::unordered_map<const Node*, QItem> nodeInfo;
-            std::priority_queue<QItem, std::vector<QItem>, decltype(compare)> q(compare);
-
+        template <typename Fn>
+        std::enable_if_t<
+            is_trajectory_callback_v<Fn, State, Traj> ||
+            is_trajectory_reference_callback_v<Fn, State, Traj> >
+        solution(Fn fn) const {
+            Djikstras<const Edge*, Distance, Goal, Edges> shortestPath{Goal{goalNodes_}};
+            
             for (const Node* n : startNodes_) {
-                nodeInfo[n] = std::tuple<Distance, const Node*>(0, nullptr);
-                q.emplace(Distance(0), n);
+                if (goalNodes_.count(n) > 0) {
+                    MPT_LOG(WARN, "start is goal, cannot iterate through trajectories");
+                    return;
+                }
+                for (const Edge *e = n->edges() ; e ; e = e->next(std::memory_order_acquire))
+                    shortestPath.addStart(e, e->distance());
             }
 
-            std::vector<State> path;
-            while (!q.empty()) {
-                auto [ dMin, min ] = q.top();
-                q.pop();
-
-                // already popped
-                if (std::get<Distance>(nodeInfo[min]) < dMin)
-                    continue;
-
-                assert(std::get<Distance>(nodeInfo[min]) == dMin);
-
-                if (goalNodes_.find(min) != goalNodes_.end()) {
-                    MPT_LOG(DEBUG) << "goal expaned";
-                    for (const Node *n = min ; n ; n = std::get<const Node*>(nodeInfo[n]))
-                        path.push_back(n->state());
-                    std::reverse(path.begin(), path.end());
-                    break;
-                }
-
-                for (const Edge *e = min->edges() ; e ; e = e->next(std::memory_order_acquire)) {
-                    Distance d = dMin + workers_[0].space().distance(min->state(), e->to()->state());
-                    auto dBest = nodeInfo.find(e->to());
-                    if (dBest == nodeInfo.end()) {
-                        nodeInfo[e->to()] = {d, min};
-                        q.emplace(d, e->to());
-                    } else if (d < std::get<Distance>(dBest->second)) {
-                        dBest->second = {d, min}; // std::make_tuple(d, min);
-                        q.emplace(d, e->to());
+            shortestPath([&] (std::size_t n, auto first, auto last) {
+                if (n < 2)
+                    return;
+                for (auto it = first ; it != last ; ++it) {
+                    const Edge *e = *it;
+                    if constexpr (is_trajectory_reference_callback_v<Fn, State, Traj>) {
+                        fn(e->from()->state(), *e->link(), e->to()->state(), e->forward());
+                    } else {
+                        fn(e->from()->state(), e->link(), e->to()->state(), e->forward());
                     }
                 }
-            }
-
-            return path;
+            });
+        }
+        
+        template <typename Fn>
+        std::enable_if_t< is_waypoint_callback_v<Fn, State, Traj> >
+        solution(Fn fn) const {
+            djikstras<const Node*, Distance>(
+                startNodes_.begin(), startNodes_.end(), Goal{goalNodes_}, Edges{},
+                [&] (std::size_t n, auto first, auto last) {
+                    for (auto it = first ; it != last ; ++it)
+                        fn((*it)->state());
+                });
         }
 
+        std::vector<State> solution() const {
+            return djikstras<const Node*, Distance>(
+                startNodes_.begin(), startNodes_.end(), Goal{goalNodes_}, Edges{},
+                [&] (std::size_t n, auto first, auto last) {
+                    std::vector<State> result;
+                    result.reserve(n);
+                    for (auto it = first ; it != last ; ++it)
+                        result.push_back((*it)->state());
+                    return result;
+                });
+        }        
+        
         void printStats() const {
             MPT_LOG(INFO) << "nodes in graph: " << nn_.size();
             // MPT_LOG(INFO) << "component count: " << componentCount_.load();
@@ -286,9 +325,9 @@ namespace unc::robotics::mpt::impl::pprm {
 
             for (auto [d, nbr] : nbh_) {
                 if (auto traj = validMotion(q, nbr->state())) {
-                    EdgePair *pair = edgePool_.allocate(n, nbr, d, std::move(traj));
-                    Component *c0 = nbr->addEdge(pair->get(0));
-                    Component *c1 = n->addEdge(pair->get(1));
+                    EdgePair *pair = edgePool_.allocate(n, nbr, d, linkTrajectory(traj));
+                    Component *c0 = n->addEdge(pair->get(0));
+                    Component *c1 = nbr->addEdge(pair->get(1));
                     Component *cm = merge(planner, c0, c1);
 
                     if (cm->isSolution())

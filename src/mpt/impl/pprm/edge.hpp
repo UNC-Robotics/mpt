@@ -37,7 +37,7 @@
 #ifndef MPT_IMPL_PPRM_EDGE_HPP
 #define MPT_IMPL_PPRM_EDGE_HPP
 
-#include "../scenario_link_store.hpp"
+#include "../link.hpp"
 #include <atomic>
 
 namespace unc::robotics::mpt::impl::pprm {
@@ -67,6 +67,14 @@ namespace unc::robotics::mpt::impl::pprm {
             return pair_->distance();
         }
 
+        bool forward() const {
+            return pair_->get(0) == this;
+        }
+
+        decltype(auto) link() const {
+            return pair_->link();
+        }
+
         const Node* to() const {
             return to_;
         }
@@ -87,7 +95,7 @@ namespace unc::robotics::mpt::impl::pprm {
     };
     
     template <typename State, typename Distance, typename Traj>
-    class EdgePair : ScenarioLinkStore<Traj> {
+    class EdgePair : public Link<Traj> {
         using Node = pprm::Node<State, Distance, Traj>;
         using Edge = pprm::Edge<State, Distance, Traj>;
 
@@ -96,13 +104,17 @@ namespace unc::robotics::mpt::impl::pprm {
 
     public:
         EdgePair(Node *from, Node* to, Distance dist, Traj&& traj)
-            : ScenarioLinkStore<Traj>(std::move(traj))
+            : Link<Traj>(std::move(traj))
             , distance_(dist)
-            , pair_{{{from, this}, {to, this}}}
+            , pair_{{{to, this}, {from, this}}}
         {
         }
 
         Edge* get(int i) {
+            return &pair_[i];
+        }
+
+        const Edge* get(int i) const {
             return &pair_[i];
         }
 

@@ -4,9 +4,9 @@
 #include <nigh/gnat.hpp>
 #include <nigh/linear.hpp>
 
-using namespace unc::robotics;
-using namespace mpt;
+using namespace unc::robotics::mpt;
 using namespace mpt_test;
+namespace nigh = unc::robotics::nigh;
 
 TEST(prrt_until_solved) {
     testSolvingBasicScenario<PRRT<>>();
@@ -32,7 +32,15 @@ TEST(prrt_options_parser) {
     // The options parser should resolve the following two planners to
     // the same concrete type.
     using Scenario = BasicScenario<>;
-    using A = mpt::Planner<Scenario, PRRT<nigh::Linear, single_threaded, report_stats<true>>>;
-    using B = mpt::Planner<Scenario, PRRT<single_threaded, report_stats<true>, nigh::Linear>>;
+    using A = Planner<Scenario, PRRT<nigh::Linear, single_threaded, report_stats<true>>>;
+    using B = Planner<Scenario, PRRT<single_threaded, report_stats<true>, nigh::Linear>>;
     EXPECT((std::is_same_v<A, B>)) == true;
+}
+
+TEST(prrt_with_trajectory) {
+    testSolvingTrajectoryScenario<PRRT<>>();
+}
+
+TEST(prrt_with_shared_trajectory) {
+    testSolvingSharedTrajectoryScenario<PRRT<>>();
 }

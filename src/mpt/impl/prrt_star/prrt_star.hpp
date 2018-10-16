@@ -38,14 +38,16 @@
 #define MPT_IMPL_PRRT_STAR_PLANNER_HPP
 
 // TODO: #include <nigh/nigh.hpp>
-#include "link.hpp"
+#include "edge.hpp"
 #include "node.hpp"
 #include "../atom.hpp"
 #include "../constants.hpp"
 #include "../goal_has_sampler.hpp"
+#include "../link_trajectory.hpp"
 #include "../object_pool.hpp"
 #include "../planner_base.hpp"
 #include "../scenario_goal.hpp"
+#include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
 #include "../scenario_space.hpp"
@@ -158,9 +160,11 @@ namespace unc::robotics::mpt::impl::prrt_star {
         using Space = scenario_space_t<Scenario>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
+        using Link = scenario_link_t<Scenario>;
+        using Traj = link_trajectory_t<Link>;
         static constexpr bool concurrent = maxThreads != 1;
-        using Link = prrt_star::Link<State, Distance, concurrent>;
-        using Node = prrt_star::Node<State, Distance, concurrent>;
+        using Edge = prrt_star::Edge<State, Distance, Traj, concurrent>;
+        using Node = prrt_star::Node<State, Distance, Traj, concurrent>;
         using RNG = scenario_rng_t<Scenario, Distance>;
         using Sampler = scenario_sampler_t<Scenario, RNG>;
         using Clock = std::chrono::steady_clock;
@@ -177,13 +181,13 @@ namespace unc::robotics::mpt::impl::prrt_star {
         nigh::Nigh<Node*, Space, NodeKey, NNConcurrency, NNStrategy> nn_;
 
         alignas(concurrent ? 64 : 0)
-        Atom<Link*, concurrent> solution_{nullptr};
+        Atom<Edge*, concurrent> solution_{nullptr};
 
         Atom<std::size_t, concurrent> goalCount_{0};
 
         std::mutex startNodeMutex_;
         ObjectPool<Node, false> startNodes_;
-        ObjectPool<Link, false> startLinks_;
+        ObjectPool<Edge, false> startEdges_;
 
         struct Worker;
 
@@ -204,16 +208,16 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return std::ceil(kRRT_ * std::log(Distance(nn_.size() + 1)));
         }
 
-        void foundGoal(Link *link, Distance) {
+        void foundGoal(Edge *edge, Distance) {
             ++goalCount_;
             MPT_LOG(DEBUG) << "added goal";
-            Link *prevSolution = solution_.load(std::memory_order_acquire);
-            while (prevSolution == nullptr || link->cost() < prevSolution->cost()) {
-                if (solution_.compare_exchange_weak(prevSolution, link)) {
+            Edge *prevSolution = solution_.load(std::memory_order_acquire);
+            while (prevSolution == nullptr || edge->cost() < prevSolution->cost()) {
+                if (solution_.compare_exchange_weak(prevSolution, edge)) {
                     MPT_LOG(INFO) << (prevSolution
                                       ? "new solution found with cost "
                                       : "found initial solution with cost ")
-                                  << link->cost()
+                                  << edge->cost()
                                   << ", after " << elapsedSolveTime();
                     break;
                 }
@@ -264,7 +268,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
             Node *node;
             if constexpr (concurrent) {
                 node = startNodes_.allocate(false, std::forward<Args>(args)...);
-                workers_[0].setLink(*this, node, startLinks_.allocate(node));
+                workers_[0].setEdge(*this, node, startEdges_.allocate(Traj(), node));
             } else {
                 node = startNodes_.allocate(false, std::forward<Args>(args)...);
             }
@@ -295,7 +299,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
             if constexpr (reportStats) {
                 MPT_LOG(DEBUG) << "final k-nearest value of " << rewireCount();
-                if (Link* solution = solution_.load(std::memory_order_relaxed))
+                if (Edge* solution = solution_.load(std::memory_order_relaxed))
                     MPT_LOG(INFO) << "final solution cost " << solution->cost();
                 else
                     MPT_LOG(INFO) << "no solution found";
@@ -310,16 +314,50 @@ namespace unc::robotics::mpt::impl::prrt_star {
         // prototype method
         std::vector<State> solution() const {
             std::vector<State> path;
-            if (const Link *link = solution_.load(std::memory_order_acquire)) {
+            if (const Edge *edge = solution_.load(std::memory_order_acquire)) {
                 for (;;) {
-                    path.push_back(link->node()->state());
-                    if ((link = link->parent()) == nullptr)
+                    path.push_back(edge->node()->state());
+                    if ((edge = edge->parent()) == nullptr)
                         break;
-                    link = link->node()->link(std::memory_order_acquire);
+                    edge = edge->node()->edge(std::memory_order_acquire);
                 }
                 std::reverse(path.begin(), path.end());
             }
             return path;
+        }
+
+    private:
+        template <typename Fn>
+        std::enable_if_t< is_trajectory_callback_v<Fn, State, Traj> >
+        solutionRecur(const Edge *edge, Fn& fn) const {
+            if (const Edge *p = edge->parent()) {
+                solutionRecur(p, fn);
+                fn(p->node()->state(), edge->link(), edge->node()->state(), true);
+            }
+        }
+
+        template <typename Fn>
+        std::enable_if_t< is_trajectory_reference_callback_v<Fn, State, Traj> >
+        solutionRecur(const Edge *edge, Fn& fn) const {
+            if (const Edge *p = edge->parent()) {
+                solutionRecur(p, fn);
+                fn(p->node()->state(), *edge->link(), edge->node()->state(), true);
+            }
+        }
+
+        template <typename Fn>
+        std::enable_if_t< is_waypoint_callback_v<Fn, State, Traj> >
+        solutionRecur(const Edge *edge, Fn& fn) const {
+            if (const Edge *p = edge->parent())
+                solutionRecur(p, fn);
+            fn(edge->node()->state());
+        }
+
+    public:
+        template <typename Fn>
+        void solution(Fn fn) const {
+            if (const Edge *edge = solution_.load(std::memory_order_acquire))
+                solutionRecur(edge, fn);
         }
 
         void printStats() const {
@@ -337,8 +375,8 @@ namespace unc::robotics::mpt::impl::prrt_star {
         void visitNodes(Visitor&& visitor, const Nodes& nodes) const {
             for (const Node& n : nodes) {
                 visitor.vertex(n.state());
-                if (const Link *link = n.link(std::memory_order_acquire))
-                    if (const Link *parent = link->parent())
+                if (const Edge *edge = n.edge(std::memory_order_acquire))
+                    if (const Edge *parent = edge->parent())
                         if (const Node *e = parent->node())
                             visitor.edge(e->state());
             }
@@ -364,16 +402,16 @@ namespace unc::robotics::mpt::impl::prrt_star {
         RNG rng_;
 
         ObjectPool<Node> nodes_;
-        ObjectPool<Link> links_;
+        ObjectPool<Edge> edges_;
 
         std::vector<std::tuple<Node*, Distance>> nbh_;
-        std::vector<std::tuple<Link*, std::size_t>> linkIndices_;
+        std::vector<std::tuple<Edge*, std::size_t>> edgeIndices_;
 
     public:
         Worker(Worker&& other)
             : scenario_(other.scenario_)
             , nodes_(std::move(other.nodes_))
-            , links_(std::move(other.links_))
+            , edges_(std::move(other.edges_))
         {
         }
 
@@ -483,16 +521,21 @@ namespace unc::robotics::mpt::impl::prrt_star {
                 dNear = scenario_.space().distance(nearNode->state(), newState);
             }
 
+
+            if (!scenario_.valid(newState))
+                return;
+
             // TODO: do not need to check when scenario returns
             // std::optional<State> and the motion was not
             // interpolated.
-            if (!validMotion<true>(nearNode->state(), newState))
+            auto traj = validMotion(nearNode->state(), newState);
+            if (!traj)
                 return;
 
             auto [isGoal, goalDist] = scenario_.goal()(scenario_.space(), newState);
             (void)goalDist; // mark unused (for now, may be used in approx solutions)
 
-            Link* parent = nearNode->link(std::memory_order_relaxed);
+            Edge* parent = nearNode->edge(std::memory_order_relaxed);
             Distance parentCost = parent->cost() + dNear; // scenario_.space().distance(nearNode->state(), newState);
 
             unsigned k = planner.rewireCount();
@@ -506,25 +549,25 @@ namespace unc::robotics::mpt::impl::prrt_star {
             }
 
             Stats::rewireTests(nbh_.size());
-            linkIndices_.resize(nbh_.size());
+            edgeIndices_.resize(nbh_.size());
             for (std::size_t i=0 ; i<nbh_.size() ; ++i)
-                linkIndices_[i] = { std::get<Node*>(nbh_[i])->link(std::memory_order_relaxed), i };
+                edgeIndices_[i] = { std::get<Node*>(nbh_[i])->edge(std::memory_order_relaxed), i };
 
             std::sort(
-                linkIndices_.begin(), linkIndices_.end(),
+                edgeIndices_.begin(), edgeIndices_.end(),
                 [&] (const auto& a, const auto& b) {
-                    return std::get<Link*>(a)->cost() + std::get<Distance>(nbh_[std::get<std::size_t>(a)])
-                         < std::get<Link*>(b)->cost() + std::get<Distance>(nbh_[std::get<std::size_t>(b)]);
+                    return std::get<Edge*>(a)->cost() + std::get<Distance>(nbh_[std::get<std::size_t>(a)])
+                         < std::get<Edge*>(b)->cost() + std::get<Distance>(nbh_[std::get<std::size_t>(b)]);
                 });
 
-            // Find the nearest parent to connect, since links are
+            // Find the nearest parent to connect, since edges are
             // sorted from nearest the farthest, we can stop as soon
             // as we've found a valid connection, or we've found the
             // nearNode that we've already checked.
-            for (auto [nbrLink, nbrIndex] : linkIndices_) {
-                Distance newCost = nbrLink->cost() + std::get<Distance>(nbh_[nbrIndex]);
+            for (auto [nbrEdge, nbrIndex] : edgeIndices_) {
+                Distance newCost = nbrEdge->cost() + std::get<Distance>(nbh_[nbrIndex]);
 
-                if (nbrLink == parent && newCost != parentCost) {
+                if (nbrEdge == parent && newCost != parentCost) {
                     MPT_LOG(FATAL) << "bad distance: " << newCost << " != " << parentCost;
                     abort();
                 }
@@ -534,29 +577,36 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
                 std::get<Node*>(nbh_[nbrIndex]) = nullptr; // mark as checked
 
-                if (nbrLink->node() == nearNode || validMotion<false>(nbrLink->node()->state(), newState)) {
-                    parent = nbrLink;
+                if (nbrEdge->node() == nearNode) {
+                    parent = nbrEdge;
                     parentCost = newCost;
                     break;
+                }
+
+                if (auto nbrTraj = validMotion(nbrEdge->node()->state(), newState)) {
+                    traj = nbrTraj;
+                    parent = nbrEdge;
+                    parentCost = newCost;
+                    break;                    
                 }
             }
 
             Node* newNode;
-            Link* newLink;
+            Edge* newEdge;
 
             if constexpr (concurrent) {
                 newNode = nodes_.allocate(isGoal, newState);
-                newLink = links_.allocate(newNode, parent, parentCost);
-                setLink(planner, newNode, newLink);
+                newEdge = edges_.allocate(linkTrajectory(traj), newNode, parent, parentCost);
+                setEdge(planner, newNode, newEdge);
             } else {
-                newNode = nodes_.allocate(parent, parentCost, isGoal, newState);
-                newLink = newNode->link();
+                newNode = nodes_.allocate(linkTrajectory(traj), parent, parentCost, isGoal, newState);
+                newEdge = newNode->edge();
             }
 
             planner.nn_.insert(newNode);
 
             if (isGoal)
-                planner.foundGoal(newLink, goalDist);
+                planner.foundGoal(newEdge, goalDist);
 
             // rewire from nearest to farthest (TODO: for PRRT, this
             // should be done in reverse)
@@ -568,54 +618,54 @@ namespace unc::robotics::mpt::impl::prrt_star {
 
                 assert(nbrNode != parent->node());
 
-                Link *nbrLink = nbrNode->link(std::memory_order_acquire);
+                Edge *nbrEdge = nbrNode->edge(std::memory_order_acquire);
                 Distance newCost = parentCost + nbrDist;
-                if (newCost < nbrLink->cost() && validMotion<false>(newNode->state(), nbrNode->state())) {
+                if (newCost >= nbrEdge->cost())
+                    continue;
+                
+                if (auto traj = validMotion(newNode->state(), nbrNode->state())) {
                     if constexpr (concurrent) {
-                        setLink(planner, nbrNode, links_.allocate(nbrNode, newLink, newCost));
+                        setEdge(planner, nbrNode, edges_.allocate(
+                                    linkTrajectory(traj), nbrNode, newEdge, newCost));
                     } else {
                         // we special case the update for
                         // non-concurrent planning (i.e. standard
                         // RRT*) In this case, we can reuse the
-                        // existing links without worry of a
+                        // existing edges without worry of a
                         // concurrent update.
-                        Distance delta = nbrLink->cost() - newCost;
-                        nbrLink->setParent(newLink);
-                        nbrLink->setCost(newCost);
-                        nonConcurrentPushUpdate(planner, nbrLink, delta);
+                        Distance delta = nbrEdge->cost() - newCost;
+                        nbrEdge->setLink(linkTrajectory(traj));
+                        nbrEdge->setParent(newEdge);
+                        nbrEdge->setCost(newCost);
+                        nonConcurrentPushUpdate(planner, nbrEdge, delta);
                     }
                 }
             }
         }
 
-        template <bool checkEnd>
-        bool validMotion(const State& a, const State& b) {
+        decltype(auto) validMotion(const State& a, const State& b) {
             Timer timer(Stats::validMotion());
-            
-            if (checkEnd && !scenario_.valid(b))
-                return false;
-
             return scenario_.link(a, b);
         }
 
-        void nonConcurrentPushUpdate(Planner& planner, Link* link, Distance delta) {
+        void nonConcurrentPushUpdate(Planner& planner, Edge* edge, Distance delta) {
             assert(!concurrent && delta > 0);
             Stats::rewireCount();
-            if (link->node()->goal()) {
-                Link *prevSolution = planner.solution_;
-                if (link == prevSolution) {
+            if (edge->node()->goal()) {
+                Edge *prevSolution = planner.solution_;
+                if (edge == prevSolution) {
                     MPT_LOG(INFO) << "solution improved, new cost "
-                        << link->cost()
+                        << edge->cost()
                         << ", after " << planner.elapsedSolveTime();
-                } else if (link->cost() < prevSolution->cost()) {
-                    planner.solution_.store(link);
+                } else if (edge->cost() < prevSolution->cost()) {
+                    planner.solution_.store(edge);
                     MPT_LOG(INFO) << "solution changed, new cost "
-                        << link->cost()
+                        << edge->cost()
                         << ", after " << planner.elapsedSolveTime();
                 }
             }
 
-            for (Link *child = link->firstChild(std::memory_order_relaxed) ;
+            for (Edge *child = edge->firstChild(std::memory_order_relaxed) ;
                  child != nullptr ;
                  child = child->nextSibling(std::memory_order_acquire))
             {
@@ -624,39 +674,39 @@ namespace unc::robotics::mpt::impl::prrt_star {
             }
         }
 
-        void setLink(Planner& planner, Node* node, Link* newLink) {
-            Link *oldLink = node->link(std::memory_order_relaxed);
+        void setEdge(Planner& planner, Node* node, Edge* newEdge) {
+            Edge *oldEdge = node->edge(std::memory_order_relaxed);
             for (;;) {
-                if (oldLink && oldLink->cost() <= newLink->cost()) {
-                    // the existing link is shorter, move in reverse
-                    std::swap(oldLink, newLink);
+                if (oldEdge && oldEdge->cost() <= newEdge->cost()) {
+                    // the existing edge is shorter, move in reverse
+                    std::swap(oldEdge, newEdge);
                     break;
                 }
-                if (node->casLink(
-                        oldLink, newLink,
+                if (node->casEdge(
+                        oldEdge, newEdge,
                         std::memory_order_release,
                         std::memory_order_relaxed))
                     break;
-                // MPT_LOG(DEBUG, "CAS failed (setLink)", no_);
+                // MPT_LOG(DEBUG, "CAS failed (setEdge)", no_);
             }
 
             if (node->goal()) {
                 // note: prevSolution can be null under concurrency,
                 // the goal node is inserted into the motion graph
                 // before it updates the solution.
-                Link *prevSolution = planner.solution_.load(std::memory_order_acquire);
-                while (prevSolution == nullptr || newLink->cost() < prevSolution->cost()) {
+                Edge *prevSolution = planner.solution_.load(std::memory_order_acquire);
+                while (prevSolution == nullptr || newEdge->cost() < prevSolution->cost()) {
                     if (planner.solution_.compare_exchange_weak(
-                            prevSolution, newLink,
+                            prevSolution, newEdge,
                             std::memory_order_release,
                             std::memory_order_relaxed))
                     {
                         MPT_LOG(INFO) << (prevSolution == nullptr
                                           ? "found initial solution with cost "
-                                          : (newLink->node() == prevSolution->node()
+                                          : (newEdge->node() == prevSolution->node()
                                              ? "solution improved, new cost "
                                              : "solution changed, new cost "))
-                                      << newLink->cost()
+                                      << newEdge->cost()
                                       << ", after " << planner.elapsedSolveTime();
                         break;
                     } else {
@@ -665,39 +715,41 @@ namespace unc::robotics::mpt::impl::prrt_star {
                 }
             }
 
-            // at this point, oldLink is "owned" by this thread,
+            // at this point, oldEdge is "owned" by this thread,
             // whether or not the CAS was successful.
-            if (oldLink == nullptr)
+            if (oldEdge == nullptr)
                 return;
 
             do {
-                Distance costDelta = oldLink->cost() - newLink->cost();
+                Distance costDelta = oldEdge->cost() - newEdge->cost();
                 assert(costDelta >= 0);
 
-                // remove the children from the oldLink.  Another thread
+                // remove the children from the oldEdge.  Another thread
                 // may still have a reference to it.
-                Link *firstChild = oldLink->firstChild(std::memory_order_relaxed);
-                while (!oldLink->casFirstChild(
+                Edge *firstChild = oldEdge->firstChild(std::memory_order_relaxed);
+                while (!oldEdge->casFirstChild(
                            firstChild, nullptr,
                            std::memory_order_release,
                            std::memory_order_relaxed)) {
                     // MPT_LOG(DEBUG, "[%u]: CAS failed (firstChild)", no_);
                 }
 
-                for (Link *oldChild = firstChild ; oldChild ; oldChild = oldChild->nextSibling(std::memory_order_acquire)) {
+                for (Edge *oldChild = firstChild ; oldChild ; oldChild = oldChild->nextSibling(std::memory_order_acquire)) {
                     Node *childNode = oldChild->node();
-                    Link *shorterLink = links_.allocate(childNode, newLink, oldChild->cost() - costDelta);
-                    setLink(planner, childNode, shorterLink);
+                    Edge *shorterEdge = edges_.allocate(
+                        *oldChild, childNode, newEdge, oldChild->cost() - costDelta);
+                    
+                    setEdge(planner, childNode, shorterEdge);
                 }
 
-                // we've moved all the children from oldLink to
-                // newLink.  Check now that newLink is still active.
+                // we've moved all the children from oldEdge to
+                // newEdge.  Check now that newEdge is still active.
                 // If it is not, then we must move over any remaining
-                // links to the replacement.
+                // edges to the replacement.
 
-                oldLink = newLink;
-                newLink = node->link(std::memory_order_acquire);
-            } while (oldLink != newLink);
+                oldEdge = newEdge;
+                newEdge = node->edge(std::memory_order_acquire);
+            } while (oldEdge != newEdge);
         }
     };
 }

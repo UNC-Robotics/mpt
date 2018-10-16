@@ -40,15 +40,15 @@
 #include "../atom.hpp"
 
 namespace unc::robotics::mpt::impl::prrt_star {
-    template <typename State, typename Distance, bool concurrent>
-    class Link;
+    template <typename State, typename Distance, typename Traj, bool concurrent>
+    class Edge;
 
-    template <typename State, typename Distance, bool concurrent>
+    template <typename State, typename Distance, typename Traj, bool concurrent>
     class Node {
-        using Link = prrt_star::Link<State, Distance, concurrent>;
+        using Edge = prrt_star::Edge<State, Distance, Traj, concurrent>;
 
         State state_;
-        Atom<Link*, concurrent> link_{nullptr};
+        Atom<Edge*, concurrent> edge_{nullptr};
         bool goal_;
 
     public:
@@ -63,21 +63,21 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return goal_;
         }
 
-        Link* link(std::memory_order order) {
-            return link_.load(order);
+        Edge* edge(std::memory_order order) {
+            return edge_.load(order);
         }
 
-        const Link* link(std::memory_order order) const {
-            return link_.load(order);
+        const Edge* edge(std::memory_order order) const {
+            return edge_.load(order);
         }
 
-        void setLink(Link *link) {
+        void setEdge(Edge *edge) {
             assert(!concurrent); // only intended for use with non-concurrent RRT*
-            link_.store(link);
+            edge_.store(edge);
         }
 
-        bool casLink(Link*& expect, Link* value, std::memory_order success, std::memory_order failure) {
-            return link_.compare_exchange_weak(expect, value, success, failure);
+        bool casEdge(Edge*& expect, Edge* value, std::memory_order success, std::memory_order failure) {
+            return edge_.compare_exchange_weak(expect, value, success, failure);
         }
 
         const State& state() const {
@@ -85,12 +85,12 @@ namespace unc::robotics::mpt::impl::prrt_star {
         }
     };
 
-    template <typename State, typename Distance>
-    class Node<State, Distance, false>
-        : prrt_star::Link<State, Distance, false>
+    template <typename State, typename Distance, typename Traj>
+    class Node<State, Distance, Traj, false>
+        : prrt_star::Edge<State, Distance, Traj, false>
     {
-        using Link = prrt_star::Link<State, Distance, false>;
-        friend class prrt_star::Link<State, Distance, false>;
+        using Edge = prrt_star::Edge<State, Distance, Traj, false>;
+        friend class prrt_star::Edge<State, Distance, Traj, false>;
 
         State state_;
         bool goal_;
@@ -105,8 +105,8 @@ namespace unc::robotics::mpt::impl::prrt_star {
         }
 
         template <typename ... Args>
-        Node(Link *parent, Distance cost, bool goal, Args&& ... args)
-            : Link(parent, cost)
+        Node(Traj&& traj, Edge *parent, Distance cost, bool goal, Args&& ... args)
+            : Edge(std::move(traj), parent, cost)
             , state_(std::forward<Args>(args)...)
             , goal_(goal)
         {
@@ -120,18 +120,18 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return state_;
         }
 
-        Link* link(std::memory_order = std::memory_order_acquire) {
+        Edge* edge(std::memory_order = std::memory_order_acquire) {
             return this;
         }
 
-        const Link* link(std::memory_order = std::memory_order_acquire) const {
+        const Edge* edge(std::memory_order = std::memory_order_acquire) const {
             return this;
         }
     };
 
     struct NodeKey {
-        template <typename State, typename Distance, bool concurrent>
-        const State& operator() (const Node<State, Distance, concurrent>* node) const {
+        template <typename State, typename Distance, typename Traj, bool concurrent>
+        const State& operator() (const Node<State, Distance, Traj, concurrent>* node) const {
             return node->state();
         }
     };
