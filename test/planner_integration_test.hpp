@@ -5,6 +5,7 @@
 #include <mpt/planner.hpp>
 #include "test.hpp"
 #include <fstream> // TODO: <-- remove
+#include <iostream>
 #include <optional>
 
 namespace mpt_test {
@@ -94,6 +95,7 @@ namespace mpt_test {
         explicit BasicScenario(Scalar r = Base::defaultObstacleRadius())
             : centerObstacleRadiusSquared_(r*r)
         {
+            std::cout << r;
             MPT_LOG(DEBUG) << "radius=" << r;
         }
         
@@ -176,7 +178,7 @@ namespace mpt_test {
     template <typename Algorithm>
     void testSolvingBasicScenario() {
         using Scalar = double;
-        static constexpr int dim = 3;
+        static constexpr int dim = 2;
         using namespace unc::robotics;
         using namespace mpt;
         using namespace mpt_test;
@@ -188,6 +190,8 @@ namespace mpt_test {
         Planner<Scenario, Algorithm> planner;
         
         planner.addStart(Scenario::startState());
+
+
         if constexpr (has_add_goal<Planner<Scenario, Algorithm>, decltype(Scenario::goalState())>::value)
             planner.addGoal(Scenario::goalState());
 
@@ -199,19 +203,32 @@ namespace mpt_test {
         EXPECT(planner.solved()) == true;
 
         std::vector<State> solution = planner.solution();
+
+        std::cout << "\n---------------\n";
+        std::cout << "start state:\n";
+        std::cout << Scenario::startState();
+        std::cout << "\n---------------\n";
+
+        std::cout << "\n---------------\n";
+        std::cout << "goal state:\n";
+        std::cout << Scenario::goalState();
+        std::cout << "\n---------------\n";
+
         EXPECT(solution.size()) > 2; // start + end + at least one waypoint around obstacle
         EXPECT(solution[0] == Scenario::startState()) == true;
         EXPECT(solution.back() == Scenario::goalState()) == true;
 
+        /*
         auto sit = solution.begin();
         planner.solution([&] (const State& a) {
             EXPECT(*sit++ == a) == true;
         });
         EXPECT(sit == solution.end()) == true;
+        */
         
         // the following block outputs an svg file with the graph from
         // the plan.
-#if 0
+#if 1
         std::ofstream out("test_output.svg");
         
         struct Visitor {

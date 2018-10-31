@@ -54,3 +54,7 @@ foreach (nn KDTreeBatch GNAT)
     endforeach(scalar)
 endforeach(nn)
 
+set(trgt holonomic_2d_point_planning)
+add_executable(${trgt} holonomic_2d_point_planning.cpp)
+target_link_libraries(${trgt} Eigen3::Eigen)
+
