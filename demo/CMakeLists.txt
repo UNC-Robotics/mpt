@@ -11,6 +11,8 @@ find_package(OpenMP REQUIRED)
 #find_package(FCL REQUIRED)
 find_package(Assimp REQUIRED)
 
+find_package(PNG REQUIRED)
+
 ######### Find CCD the hard way
 find_package(PkgConfig)
 if (PKGCONFIG_FOUND)
@@ -23,7 +25,7 @@ endif()
 #########
 
 link_directories(${FCL_LIBRARY_DIRS} ${ASSIMP_LIBRARY_DIRS} ${CCD_LIBRARY_DIRS})
-include_directories(../src ../../nigh/src ${FCL_INCLUDE_DIRS} ${CCD_LIBRARY_DIRS} ${ASSIMP_INCLUDE_DIRS})
+include_directories(../src ../../nigh/src ${FCL_INCLUDE_DIRS} ${CCD_LIBRARY_DIRS} ${ASSIMP_INCLUDE_DIRS} ${PNG_INCLUDE_DIR})
 
 if (OPENMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -57,4 +59,8 @@ endforeach(nn)
 set(trgt holonomic_2d_point_planning)
 add_executable(${trgt} holonomic_2d_point_planning.cpp)
 target_link_libraries(${trgt} Eigen3::Eigen)
+
+set(trgt png_2d_planning)
+add_executable(${trgt} png_2d_planning.cpp)
+target_link_libraries(${trgt} Eigen3::Eigen ${PNG_LIBRARY})
 

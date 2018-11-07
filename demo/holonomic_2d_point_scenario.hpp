@@ -101,26 +101,22 @@ namespace mpt_demo {
         }
 
         bool valid(const State &q) const {
-            for(auto const &c : circles_){
+            for(auto const &c : circles_)
                 if(!c.pointIsValid(q))
                     return false;
-            }
-            for(auto const &r : rects_){
+            for(auto const &r : rects_)
                 if(!r.pointIsValid(q))
                     return false;
-            }
             return true;
         }
 
         bool link(const State &a, const State &b) const {
-            for(auto const &c : circles_){
+            for(auto const &c : circles_)
                 if(!c.segmentIsValid(a, b))
                     return false;
-            }
-            for(auto const &r : rects_){
+            for(auto const &r : rects_)
                 if(!r.segmentIsValid(a, b))
                     return false;
-            }
             return true;
         }
 

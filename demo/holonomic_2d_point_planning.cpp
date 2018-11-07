@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
             const auto &from = *it;
             const auto &to = *(it + 1);
             file << '\t' << "<line "
-                  << "x1='" << from[0] << "' "
+                  "x1='" << from[0] << "' "
                   "y1='" << from[1] << "' "
                   "x2='" << to[0] << "' "
                   "y2='" << to[1] << "' stroke='rgb(50,50,250)' stroke-width='2"
