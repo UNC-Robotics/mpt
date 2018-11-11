@@ -27,12 +27,10 @@ int main(int argc, char *argv[])
      * Read png file
      */
     std::string inputName = "../../png_planning_input.png";
+
     FILE *fp = std::fopen(inputName.c_str(), "rb");
-    if(!fp) puts("file cannot be read");
     png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if(!png) puts("png struct");
     png_infop info = png_create_info_struct(png);
-    if(!info) puts("png info");
     if(setjmp(png_jmpbuf(png))) abort();
 
     png_init_io(png, fp);
@@ -59,13 +57,14 @@ int main(int argc, char *argv[])
         png_set_strip_alpha(png);
     // update the changes
     png_read_update_info(png, info);
+
     /*
      * allocate the bitmap
      */
 
     auto rowBytes = png_get_rowbytes(png, info);
-
     bit_depth  = png_get_bit_depth(png, info);
+
     std::vector<png_bytep> rowPointers(height);
     std::vector<png_byte> image(rowBytes * height);
     for (int y = 0 ; y < height ; ++y)
@@ -106,6 +105,7 @@ int main(int argc, char *argv[])
     /*
      * Draw the solution path and write it to a png
      */
+
     std::vector<State> solution = planner.solution();
     if(solution.empty())
     {
@@ -128,9 +128,11 @@ int main(int argc, char *argv[])
                 addSolutionEdge(file, from[0], from[1], to[0], to[1]);
             }
         }
+
         /*
-         * Draw the visited links
+         * Enable this to visit the visited links
          */
+
 #if 1
         struct Visitor
         {
@@ -160,6 +162,7 @@ int main(int argc, char *argv[])
     /*
      * Free the png variables
      */
+
     png_destroy_read_struct(&png, &info, NULL);
     fclose(fp);
     return 0;
@@ -171,14 +174,8 @@ inline void writePngFile(png_bytep *rowPointers, int width, int height)
     MPT_LOG(INFO) << "Writing filtered png to " << outputName;
     FILE *fp = fopen(outputName.c_str(), "wb");
 
-    if(!fp) abort();
-
     png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png) abort();
-
     png_infop info = png_create_info_struct(png);
-    if (!info) abort();
-
     if (setjmp(png_jmpbuf(png))) abort();
 
     png_init_io(png, fp);
@@ -229,7 +226,6 @@ inline std::vector<bool> filter(png_bytep *rowPointers, std::vector<PNGColor> &f
             }
             obstacle[width * y + x] = isObstacle ? true : false;
 
-            // TODO: Track invalid pixel independently. e.g. make isValid[x][y] matrix
             if(PRINT_FILTERED_IMAGE)
             {
                 px[0] = isObstacle ? 0 : 255;
