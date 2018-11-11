@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 
     circles.push_back(Circle<Scalar>(170.0, 140.0, 80.0, obstacleColor));
     circles.push_back(Circle<Scalar>(800.0, 70.0, 50.0, obstacleColor));
-    //circles.push_back(Circle<Scalar>(900.0, 380.0, 70.0, obstacleColor));
+    circles.push_back(Circle<Scalar>(900.0, 380.0, 70.0, obstacleColor));
 
     rects.push_back(Rect<Scalar>(375, 140, 520, 220, obstacleColor));
     rects.push_back(Rect<Scalar>(200, 320, 390, 390, obstacleColor));
