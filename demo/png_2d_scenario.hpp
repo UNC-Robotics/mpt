@@ -149,7 +149,7 @@ namespace mpt_demo
             // uses bisection method to verify links.
             State mid = (a + b) / 2;
             Scalar distSquared = (b - a).squaredNorm();
-            Scalar tolerance = 0.1;
+            Scalar tolerance = 1;
             if(distSquared < tolerance * tolerance)
                 return true;
             if(!valid(mid))
@@ -162,7 +162,7 @@ namespace mpt_demo
         png_bytep get(int x, int y) const
         {
             png_bytep row = rowPointers_[y];
-            png_bytep px = &(row[x * 4]);
+            png_bytep px = &(row[x * 3]);
             return px;
         }
     };

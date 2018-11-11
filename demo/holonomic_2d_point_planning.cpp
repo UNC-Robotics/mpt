@@ -38,7 +38,6 @@
 #include "holonomic_2d_point_scenario.hpp"
 #include <mpt/prrt_star.hpp>
 #include "shape_hierarchy.hpp"
-#include "svg.hpp"
 #include <sstream>
 #include <fstream>
 #include <Eigen/Dense>

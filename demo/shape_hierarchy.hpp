@@ -77,8 +77,14 @@ namespace shape
         file << addAttr("width", width, "px");
         file << addAttr("height", height, "px");
         file << addAttr("xmlns", "http://www.w3.org/2000/svg");
+        file << addAttr("xmlns:xlink", "http://www.w3.org/1999/xlink");
         file << addAttr("version", "1.1");
         file << ">\n";
+    }
+
+    inline void addImage(std::ofstream &file, std::string &path)
+    {
+        file << '\t' << startTag("image") << addAttr("xlink:href", path) << closeTag();
     }
 
     inline void endSvg(std::ofstream &file)
@@ -87,6 +93,27 @@ namespace shape
         file.close();
     }
 
+    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2)
+    {
+        file << "\t<line "
+                 "x1='" << x1 << "' "
+                 "y1='" << y1 << "' "
+                 "x2='" << x2 << "' "
+                 "y2='" << y2 << "' stroke="
+                 "'rgb(250,50,50)' stroke-width='4"
+                 "' />\n";
+    }
+
+    inline void addVisitedEdge(std::ofstream &file, double x1, double y1, double x2, double y2)
+    {
+        file << "\t<line "
+                 "x1='" << x1 << "' "
+                 "y1='" << y1 << "' "
+                 "x2='" << x2 << "' "
+                 "y2='" << y2 << "' stroke="
+                 "'rgb(125,125,125)' stroke-width='1"
+                 "' />\n";
+    }
 
     class Color
     {
@@ -203,9 +230,9 @@ namespace shape
     template <typename Scalar>
     std::ostream &operator<<(std::ostream &strm, const Rect<Scalar> &r)
     {
-        return strm << '\t' << startTag("rect") << addAttr("x", r.p0_[0]) << addAttr("y", r.p0_[1]) 
-            << addAttr("width", r.p1_[0] - r.p0_[0]) << addAttr("height", r.p1_[1] - r.p0_[1]) 
-            << " fill='" << r.color_ << "'" << closeTag();
+        return strm << '\t' << startTag("rect") << addAttr("x", r.p0_[0]) << addAttr("y", r.p0_[1])
+               << addAttr("width", r.p1_[0] - r.p0_[0]) << addAttr("height", r.p1_[1] - r.p0_[1])
+               << " fill='" << r.color_ << "'" << closeTag();
     }
 }
 #endif
