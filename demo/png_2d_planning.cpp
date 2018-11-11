@@ -16,8 +16,10 @@ using State = Eigen::Matrix<Scalar, 2, 1>;
 using Algorithm = PRRTStar<>;
 using Scenario = PNG2dScenario<Scalar>;
 
-void filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height);
-inline void writePngFile(png_bytep *rowPointers, int width, int height);
+constexpr bool PRINT_FILTERED_IMAGE = true; // enable this to export a filtered png file.
+
+std::vector<bool> filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height);
+void writePngFile(png_bytep *rowPointers, int width, int height);
 
 int main(int argc, char *argv[])
 {
@@ -42,7 +44,6 @@ int main(int argc, char *argv[])
     png_byte color_type = png_get_color_type(png, info);
     png_byte bit_depth  = png_get_bit_depth(png, info);
 
-    // std::cout << "bit depth: " << bit_depth << std::endl;
     // resolve pallete img to rgb
     if(color_type == PNG_COLOR_TYPE_PALETTE)
         png_set_palette_to_rgb(png);
@@ -65,15 +66,11 @@ int main(int argc, char *argv[])
     auto rowBytes = png_get_rowbytes(png, info);
 
     bit_depth  = png_get_bit_depth(png, info);
-    std::cout << rowBytes / width << std::endl; // should print 3 (rgb)
-
-    // std::cout << rowBytes / width << std::endl; // should print 3 (rgb)
     std::vector<png_bytep> rowPointers(height);
     std::vector<png_byte> image(rowBytes * height);
     for (int y = 0 ; y < height ; ++y)
         rowPointers[y] = &image[y * rowBytes];
     png_read_image(png, rowPointers.data());
-
 
     /*
      * filter the obstacle colors
@@ -82,13 +79,11 @@ int main(int argc, char *argv[])
     std::vector<PNGColor> filters;
     filters.push_back(PNGColor(126, 106, 61));
     filters.push_back(PNGColor(61, 53, 6));
-    filter(rowPointers.data(), filters, width, height);
 
-    /*
-     * Enable this to print a filtered image.
-     */
+    std::vector<bool> isObstacle = filter(rowPointers.data(), filters, width, height);
 
-    writePngFile(rowPointers.data(), width, height);
+    if(PRINT_FILTERED_IMAGE)
+        writePngFile(rowPointers.data(), width, height);
 
     /*
      * Initialize scenario and run planner
@@ -99,12 +94,13 @@ int main(int argc, char *argv[])
     goalState << 3150, 950;
 
 
-    Scenario scenario(width, height, goalState, rowPointers.data());
+    Scenario scenario(width, height, goalState, isObstacle);
 
     static constexpr auto MAX_SOLVE_TIME = 10000ms;
     Planner<Scenario, Algorithm> planner(scenario);
     planner.addStart(startState);
     planner.solveFor(MAX_SOLVE_TIME);
+    //planner.solveFor([&] { return planner.solved(); }, MAX_SOLVE_TIME);
     planner.printStats();
 
     /*
@@ -118,7 +114,7 @@ int main(int argc, char *argv[])
     else
     {
         const std::string outputName = "png_2d_demo.svg";
-        MPT_LOG(INFO) << "Writing to " << outputName;
+        MPT_LOG(INFO) << "Writing the solution to " << outputName;
         std::ofstream file(outputName);
         startSvg(file, width, height);
         addImage(file, inputName);
@@ -171,8 +167,8 @@ int main(int argc, char *argv[])
 
 inline void writePngFile(png_bytep *rowPointers, int width, int height)
 {
-    const std::string outputName = "png_planning_filtered.svg";
-    MPT_LOG(INFO) << "Writing to " << outputName;
+    const std::string outputName = "png_planning_filtered.png";
+    MPT_LOG(INFO) << "Writing filtered png to " << outputName;
     FILE *fp = fopen(outputName.c_str(), "wb");
 
     if(!fp) abort();
@@ -200,18 +196,15 @@ inline void writePngFile(png_bytep *rowPointers, int width, int height)
     );
     png_write_info(png, info);
 
-    // To remove the alpha channel for PNG_COLOR_TYPE_RGB format,
-    // Use png_set_filler().
-    //png_set_filler(png, 0, PNG_FILLER_AFTER);
-
     png_write_image(png, rowPointers);
     png_write_end(png, NULL);
     fclose(fp);
 }
 
 
-inline void filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height)
+inline std::vector<bool> filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height)
 {
+    std::vector<bool> obstacle(width * height);
     const int tolerance = 15;
     for(int y = 0; y < height; y++)
     {
@@ -220,34 +213,31 @@ inline void filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int w
         {
             png_bytep px = &(row[x * 3]);
             bool isObstacle = false;
+            // mark white as the obstacle
+            // TODO: move tolerance to the PNGColor class
             if(px[0] > 250 && px[1] > 250 && px[2] > 250)
             {
                 isObstacle = true;
             }
-            else
+            for(auto const &c : filters)
             {
-                for(auto const &c : filters)
+                if(c.isObstacle(px[0], px[1], px[2], tolerance))
                 {
-                    if(c.isObstacle(px[0], px[1], px[2], tolerance))
-                    {
-                        isObstacle = true;
-                        break;
-                    }
+                    isObstacle = true;
+                    break;
                 }
             }
+            obstacle[width * y + x] = isObstacle ? true : false;
+
             // TODO: Track invalid pixel independently. e.g. make isValid[x][y] matrix
-            if(isObstacle)
+            if(PRINT_FILTERED_IMAGE)
             {
-                px[0] = 0;
-                px[1] = 0;
-                px[2] = 0;
-            }
-            else
-            {
-                px[0] = 255;
-                px[1] = 255;
-                px[2] = 255;
+                px[0] = isObstacle ? 0 : 255;
+                px[1] = isObstacle ? 0 : 255;
+                px[2] = isObstacle ? 0 : 255;
             }
         }
     }
+
+    return obstacle;
 }

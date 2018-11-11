@@ -40,11 +40,7 @@
 #include <mpt/box_bounds.hpp>
 #include <mpt/goal_state.hpp>
 #include <Eigen/Dense>
-#include <iostream> // cout, cerr
-#include <fstream> // ifstream
-#include <sstream> // stringstream
 #include <vector>
-#include <png.h>
 
 namespace mpt_demo
 {
@@ -85,20 +81,20 @@ namespace mpt_demo
         Space space_;
         Bounds bounds_;
         Goal goal_;
-        png_bytep *rowPointers_;
+        std::vector<bool> isObstacle_;
 
     public:
         PNG2dScenario(
             const int width,
             const int height,
             State goalState,
-            png_bytep *rowPointers
+            std::vector<bool> &isObstacle
         )
             : width_(width),
               height_(height),
               bounds_(makeBounds()),
               goal_(1e-6, goalState),
-              rowPointers_(rowPointers)
+              isObstacle_(isObstacle)
         {
         }
 
@@ -107,11 +103,7 @@ namespace mpt_demo
             int x = (int) (q[0] + 0.5);
             int y = (int) (q[1] + 0.5);
 
-            png_bytep px = get(q[0], q[1]);
-            if(px[0] == 0 && px[1] == 0 && px[2] == 0)
-                return false;
-            else
-                return true;
+            return !isObstacle_[width_ * y + x];
         }
 
         bool link(const State &a, const State &b) const
@@ -157,13 +149,6 @@ namespace mpt_demo
             bool left = validSegment(a, mid);
             bool right = validSegment(mid, b);
             return left && right;
-        }
-
-        png_bytep get(int x, int y) const
-        {
-            png_bytep row = rowPointers_[y];
-            png_bytep px = &(row[x * 3]);
-            return px;
         }
     };
 }
