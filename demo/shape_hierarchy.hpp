@@ -96,23 +96,23 @@ namespace shape
     inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2)
     {
         file << "\t<line "
-                 "x1='" << x1 << "' "
-                 "y1='" << y1 << "' "
-                 "x2='" << x2 << "' "
-                 "y2='" << y2 << "' stroke="
-                 "'rgb(250,50,50)' stroke-width='4"
-                 "' />\n";
+             "x1='" << x1 << "' "
+             "y1='" << y1 << "' "
+             "x2='" << x2 << "' "
+             "y2='" << y2 << "' stroke="
+             "'rgb(250,50,50)' stroke-width='4"
+             "' />\n";
     }
 
     inline void addVisitedEdge(std::ofstream &file, double x1, double y1, double x2, double y2)
     {
         file << "\t<line "
-                 "x1='" << x1 << "' "
-                 "y1='" << y1 << "' "
-                 "x2='" << x2 << "' "
-                 "y2='" << y2 << "' stroke="
-                 "'rgb(125,125,125)' stroke-width='1"
-                 "' />\n";
+             "x1='" << x1 << "' "
+             "y1='" << y1 << "' "
+             "x2='" << x2 << "' "
+             "y2='" << y2 << "' stroke="
+             "'rgb(125,125,125)' stroke-width='1"
+             "' />\n";
     }
 
     class Color
@@ -162,8 +162,10 @@ namespace shape
             if(!pointIsValid(mid))
                 return false;
             bool left = bisectSegment(a, mid);
+            if(!left)
+                return false;
             bool right = bisectSegment(mid, b);
-            return left && right;
+            return right;
         }
 
     private:

@@ -147,8 +147,10 @@ namespace mpt_demo
             if(!valid(mid))
                 return false;
             bool left = validSegment(a, mid);
+            if(!left) 
+                return false;
             bool right = validSegment(mid, b);
-            return left && right;
+            return right;
         }
     };
 }
