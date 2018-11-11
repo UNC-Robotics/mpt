@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 
     circles.push_back(Circle<Scalar>(170.0, 140.0, 80.0, obstacleColor));
     circles.push_back(Circle<Scalar>(800.0, 70.0, 50.0, obstacleColor));
-    circles.push_back(Circle<Scalar>(920.0, 400.0, 70.0, obstacleColor));
+    //circles.push_back(Circle<Scalar>(900.0, 380.0, 70.0, obstacleColor));
 
     rects.push_back(Rect<Scalar>(375, 140, 520, 220, obstacleColor));
     rects.push_back(Rect<Scalar>(200, 320, 390, 390, obstacleColor));
@@ -109,12 +109,7 @@ int main(int argc, char *argv[])
 
         void edge(const State &to)
         {
-            out_ << "\t<line "
-                 "x1='" << from_[0] << "' "
-                 "y1='" << from_[1] << "' "
-                 "x2='" << to[0] << "' "
-                 "y2='" << to[1] << "' stroke='rgb(150,150,150)' stroke-width='0.5" 
-                 "' />\n";
+            addVisitedEdge(out_, from_[0], from_[1], to[0], to[1]);
         }
     };
     planner.visitGraph(Visitor(file));
@@ -124,13 +119,11 @@ int main(int argc, char *argv[])
         {
             const auto &from = *it;
             const auto &to = *(it + 1);
-            file << '\t' << "<line "
-                  "x1='" << from[0] << "' "
-                  "y1='" << from[1] << "' "
-                  "x2='" << to[0] << "' "
-                  "y2='" << to[1] << "' stroke='rgb(50,50,250)' stroke-width='2"
-                  "' />\n";
+            addSolutionEdge(file, from[0], from[1], to[0], to[1]);
         }
+    }
+    else{
+        MPT_LOG(INFO) <<  "No solution was found";
     }
     endSvg(file);
     return 0;

@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
     Scenario scenario(width, height, goalState, isObstacle);
 
-    static constexpr auto MAX_SOLVE_TIME = 10000ms;
+    static constexpr auto MAX_SOLVE_TIME = 50ms;
     Planner<Scenario, Algorithm> planner(scenario);
     planner.addStart(startState);
     planner.solveFor(MAX_SOLVE_TIME);
