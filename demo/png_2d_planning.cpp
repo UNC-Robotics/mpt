@@ -34,11 +34,11 @@
 //! @author William Lee
 
 #include "png_2d_scenario.hpp"
+#include "shape_hierarchy.hpp"
 #include <vector>
 #include <png.h>
 #include <cstdio>
 #include <mpt/prrt_star.hpp>
-#include "shape_hierarchy.hpp"
 
 using namespace mpt_demo;
 using namespace unc::robotics::mpt;
@@ -183,9 +183,6 @@ int main(int argc, char *argv[])
 
             void edge(const State &to)
             {
-                static int count = 0;
-                if(++count > 10000)
-                    return;
                 addVisitedEdge(out_, from_[0], from_[1], to[0], to[1]);
             }
         };

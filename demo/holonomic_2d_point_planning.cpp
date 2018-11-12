@@ -33,13 +33,15 @@
 
 //! @author William Lee
 
+
+#include "holonomic_2d_point_scenario.hpp"
+#include "shape_hierarchy.hpp"
 #include <vector>
 #include <cstdio>
 #include <mpt/prrt_star.hpp>
 #include <fstream>
 #include <Eigen/Dense>
-#include "holonomic_2d_point_scenario.hpp"
-#include "shape_hierarchy.hpp"
+
 
 int main(int argc, char *argv[])
 {

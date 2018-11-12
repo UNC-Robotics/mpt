@@ -111,7 +111,7 @@ namespace shape
              "x2='" << x2 << "' "
              "y2='" << y2 << "' stroke="
              "'rgb(125,125,125)' stroke-width='"
-             << width <<"' />\n";
+             << width << "' />\n";
     }
 
     class Color
@@ -186,13 +186,19 @@ namespace shape
 
         bool pointIsValid(const State &p) const
         {
-            State dist = p - center_; // distance vector
+            State dist = p - center_;
             return dist.squaredNorm() > radius_ * radius_;
         }
 
         bool segmentIsValid(const State &a, const State &b) const
         {
             return distPointSegmentSquared(center_, a, b) > radius_ * radius_;
+        }
+
+        // for robot with non trivial size (e.g. robot arm)
+        bool segmentIsValid(const State &a, const State &b, Scalar robotRadius) const
+        {
+            return distPointSegmentSquared(center_, a, b) > (radius_ + robotRadius) * (radius_ + robotRadius);
         }
 
     private:

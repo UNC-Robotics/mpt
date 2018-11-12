@@ -37,10 +37,11 @@
 #ifndef HOLONOMIC_2D_POINT_HPP
 #define HOLONOMIC_2D_POINT_HPP
 
+
+#include "shape_hierarchy.hpp"
 #include <mpt/lp_space.hpp>
 #include <mpt/box_bounds.hpp>
 #include <mpt/goal_state.hpp>
-#include "shape_hierarchy.hpp"
 #include <Eigen/Dense>
 #include <vector>
 
