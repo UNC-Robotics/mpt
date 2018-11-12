@@ -51,7 +51,7 @@ using State = Eigen::Matrix<Scalar, 2, 1>;
 using Algorithm = PRRTStar<>;
 using Scenario = PNG2dScenario<Scalar>;
 
-constexpr bool PRINT_FILTERED_IMAGE = true; // enable this to export a filtered png file.
+constexpr bool PRINT_FILTERED_IMAGE = false; // enable this to export a filtered png file.
 
 std::vector<bool> filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height);
 void writePngFile(png_bytep *rowPointers, int width, int height);

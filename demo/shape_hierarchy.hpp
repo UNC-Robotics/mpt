@@ -45,7 +45,6 @@
 
 namespace shape
 {
-    // svg methods
     inline std::string startTag(std::string tag)
     {
         return "<" + tag;
@@ -93,26 +92,26 @@ namespace shape
         file.close();
     }
 
-    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2)
+    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 4.0)
     {
         file << "\t<line "
              "x1='" << x1 << "' "
              "y1='" << y1 << "' "
              "x2='" << x2 << "' "
              "y2='" << y2 << "' stroke="
-             "'rgb(250,50,50)' stroke-width='4"
-             "' />\n";
+             "'rgb(250,50,50)' stroke-width='"
+             << width << "' />\n";
     }
 
-    inline void addVisitedEdge(std::ofstream &file, double x1, double y1, double x2, double y2)
+    inline void addVisitedEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 1.0)
     {
         file << "\t<line "
              "x1='" << x1 << "' "
              "y1='" << y1 << "' "
              "x2='" << x2 << "' "
              "y2='" << y2 << "' stroke="
-             "'rgb(125,125,125)' stroke-width='1"
-             "' />\n";
+             "'rgb(125,125,125)' stroke-width='"
+             << width <<"' />\n";
     }
 
     class Color

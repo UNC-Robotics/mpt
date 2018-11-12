@@ -37,10 +37,9 @@
 #include <cstdio>
 #include "holonomic_2d_point_scenario.hpp"
 #include <mpt/prrt_star.hpp>
-#include "shape_hierarchy.hpp"
-#include <sstream>
 #include <fstream>
 #include <Eigen/Dense>
+#include "shape_hierarchy.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -109,7 +108,7 @@ int main(int argc, char *argv[])
 
         void edge(const State &to)
         {
-            addVisitedEdge(out_, from_[0], from_[1], to[0], to[1]);
+            addVisitedEdge(out_, from_[0], from_[1], to[0], to[1], 0.3);
         }
     };
     planner.visitGraph(Visitor(file));
@@ -119,7 +118,7 @@ int main(int argc, char *argv[])
         {
             const auto &from = *it;
             const auto &to = *(it + 1);
-            addSolutionEdge(file, from[0], from[1], to[0], to[1]);
+            addSolutionEdge(file, from[0], from[1], to[0], to[1], 3);
         }
     }
     else{

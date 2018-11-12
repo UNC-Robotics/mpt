@@ -33,8 +33,8 @@
 
 //! @author William Lee
 
-#ifndef PNG_COLOR_FILTER
-#define PNG_COLOR_FILTER
+#ifndef PNG_2D_SCENARIO
+#define PNG_2D_SCENARIO
 
 #include <mpt/lp_space.hpp>
 #include <mpt/box_bounds.hpp>
@@ -54,7 +54,6 @@ namespace mpt_demo
         int g_;
         int b_;
 
-        // TODO: consider the alpha value.
         bool isObstacle(int r, int g, int b, int tol) const
         {
             if((r < r_ - tol || r > r_ + tol) || (g < g_ - tol || g > g_ + tol) || (b < b_ - tol || b > b_ + tol))
