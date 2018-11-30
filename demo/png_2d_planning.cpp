@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
      *      Planner will use the specified algorithm to explore possible paths
      *      from the start to the goal state in the given scenario.
      */
-    static constexpr auto MAX_SOLVE_TIME = 100ms; // maximum runtime allotted for the planner.
+    static constexpr auto MAX_SOLVE_TIME = 50ms; // maximum runtime allotted for the planner.
     Planner<Scenario, Algorithm> planner(scenario);
     planner.addStart(startState);  
     planner.solveFor(MAX_SOLVE_TIME);
