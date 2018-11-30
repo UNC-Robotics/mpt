@@ -39,6 +39,7 @@
 #include <vector>
 #include <cstdio>
 #include <mpt/prrt_star.hpp>
+#include <mpt/prrt.hpp>
 #include <fstream>
 #include <Eigen/Dense>
 
@@ -68,7 +69,6 @@ int main(int argc, char *argv[])
     rects.push_back(Rect<Scalar>(200, 320, 390, 390, obstacleColor));
     rects.push_back(Rect<Scalar>(600, 200, 680, 450, obstacleColor));
 
-
     const int width = 1024;
     const int height = 512;
 
@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
     MPT_LOG(INFO) << "Writing to " << filename;
     std::ofstream file(filename);
     startSvg(file, width, height);
+    
     for(auto &circle : circles)
     {
         file << circle;
@@ -113,6 +114,7 @@ int main(int argc, char *argv[])
             addVisitedEdge(out_, from_[0], from_[1], to[0], to[1], 0.3);
         }
     };
+
     planner.visitGraph(Visitor(file));
 
     if (!solution.empty()) {

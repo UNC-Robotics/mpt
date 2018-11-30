@@ -37,7 +37,6 @@
 #include "shape_hierarchy.hpp"
 #include <vector>
 #include <png.h>
-#include <cstdio>
 #include <mpt/prrt_star.hpp>
 
 using namespace mpt_demo;
@@ -51,221 +50,114 @@ using State = Eigen::Matrix<Scalar, 2, 1>;
 using Algorithm = PRRTStar<>;
 using Scenario = PNG2dScenario<Scalar>;
 
-constexpr bool PRINT_FILTERED_IMAGE = false; // enable this to export a filtered png file.
-
-std::vector<bool> filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height);
-void writePngFile(png_bytep *rowPointers, int width, int height);
+// draws the result to a svg file.
+void writeSvgFile(Planner<Scenario, Algorithm>&, const std::string&, int, int, State&, State&);
 
 int main(int argc, char *argv[])
 {
-    /*
-     * Read png file
-     */
     std::string inputName = "../../png_planning_input.png";
 
-    FILE *fp = std::fopen(inputName.c_str(), "rb");
-    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    png_infop info = png_create_info_struct(png);
-    if(setjmp(png_jmpbuf(png))) abort();
-
-    png_init_io(png, fp);
-    png_read_info(png, info);
-
-    auto width = png_get_image_width(png, info);
-    auto height = png_get_image_height(png, info);
-
-    png_byte color_type = png_get_color_type(png, info);
-    png_byte bit_depth  = png_get_bit_depth(png, info);
-
-    // resolve pallete img to rgb
-    if(color_type == PNG_COLOR_TYPE_PALETTE)
-        png_set_palette_to_rgb(png);
-
-    // restrict 1 byte per pixel
-    if(bit_depth == 16)
-        png_set_strip_16(png);
-    if (bit_depth < 8)
-        png_set_packing(png);
-
-    // strip alpha channel
-    if (color_type & PNG_COLOR_MASK_ALPHA)
-        png_set_strip_alpha(png);
-    // update the changes
-    png_read_update_info(png, info);
+    /*
+     *  1.  Choose the obstacle colors to be filtered.
+     *
+     *      FilterColor takes four parameters: r, g, b, and tolerance. It will be used
+     *      to filter each pixel that is within the tolerance of the given rgb color.
+     */
+    std::vector<FilterColor> filters;
+    filters.push_back(FilterColor(126, 106, 61, 15));
+    filters.push_back(FilterColor(61, 53, 6, 15));
+    filters.push_back(FilterColor(255, 255, 255, 5));
 
     /*
-     * allocate the bitmap
+     *  2.  Read and filter the input image.
+     *
+     *      boolean vector "obstacles" will be used to track the obstacles.
+     *      For each pixel (x, y): if obstacles(y * width + x) is true, then 
+     *      the pixel is an obstacle. Otherwise, it is not an obstacle.
      */
-
-    auto rowBytes = png_get_rowbytes(png, info);
-    bit_depth  = png_get_bit_depth(png, info);
-
-    std::vector<png_bytep> rowPointers(height);
-    std::vector<png_byte> image(rowBytes * height);
-    for (int y = 0 ; y < height ; ++y)
-        rowPointers[y] = &image[y * rowBytes];
-    png_read_image(png, rowPointers.data());
+    std::vector<bool> obstacles; 
+    int width, height; // width and the height of the input file.
+    std::tie(obstacles, width, height) = readAndFilterPng(filters, inputName); 
 
     /*
-     * filter the obstacle colors
+     *  3.  Set the start and goal states and initialize the scenario. 
      */
-
-    std::vector<PNGColor> filters;
-    filters.push_back(PNGColor(126, 106, 61));
-    filters.push_back(PNGColor(61, 53, 6));
-
-    std::vector<bool> isObstacle = filter(rowPointers.data(), filters, width, height);
-
-    if(PRINT_FILTERED_IMAGE)
-        writePngFile(rowPointers.data(), width, height);
-
-    /*
-     * Initialize scenario and run planner
-     */
-
     State startState, goalState;
-    startState << 430, 1300;
-    goalState << 3150, 950;
+    startState << 430, 1300; 
+    goalState << 3150, 950; 
 
+    Scenario scenario(width, height, goalState, obstacles);
 
-    Scenario scenario(width, height, goalState, isObstacle);
-
-    static constexpr auto MAX_SOLVE_TIME = 50ms;
+    /*
+     *  4.  Initialize and run the planner.
+     *
+     *      We initialize the planner with the scenario above. Then, we add the 
+     *      start state and run the planner for MAX_SOLVE_TIME (milliseconds).  
+     *      Planner will use the specified algorithm to explore possible paths
+     *      from the start to the goal state in the given scenario.
+     */
+    static constexpr auto MAX_SOLVE_TIME = 50ms; // maximum runtime allotted for the planner.
     Planner<Scenario, Algorithm> planner(scenario);
-    planner.addStart(startState);
+    planner.addStart(startState);  
     planner.solveFor(MAX_SOLVE_TIME);
-    //planner.solveFor([&] { return planner.solved(); }, MAX_SOLVE_TIME);
     planner.printStats();
 
-    /*
-     * Draw the solution path and write it to a png
-     */
+    writeSvgFile(planner, inputName, width, height, startState, goalState); // write the result to svg.
 
+    return 0;
+}
+
+inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::string &inputName, int width, int height, State &startState, State &goalState)
+{
     std::vector<State> solution = planner.solution();
     if(solution.empty())
     {
         MPT_LOG(INFO) <<  "No solution was found";
+        return;
     }
-    else
-    {
-        const std::string outputName = "png_2d_demo.svg";
-        MPT_LOG(INFO) << "Writing the solution to " << outputName;
-        std::ofstream file(outputName);
-        startSvg(file, width, height);
-        addImage(file, inputName);
 
-        if (!solution.empty())
+    const std::string outputName = "png_2d_demo.svg";
+    std::ofstream file(outputName);
+    startSvg(file, width, height);
+    addImage(file, inputName);
+
+    MPT_LOG(INFO) << "Writing the solution to " << outputName;
+
+    // draw the visited paths
+    struct Visitor
+    {
+        std::ofstream &out_;
+        State from_;
+
+        Visitor(std::ofstream &out) : out_(out) {}
+
+        void vertex(const State &q)
         {
-            for(auto it = solution.begin(); it + 1 != solution.end() ; ++it)
-            {
-                const auto &from = *it;
-                const auto &to = *(it + 1);
-                addSolutionEdge(file, from[0], from[1], to[0], to[1]);
-            }
+            from_ = q;
         }
 
-        /*
-         * Enable this to visit the visited links
-         */
-
-#if 1
-        struct Visitor
+        void edge(const State &to)
         {
-            std::ofstream &out_;
-            State from_;
+            addVisitedEdge(out_, from_[0], from_[1], to[0], to[1]);
+        }
+    };
+    planner.visitGraph(Visitor(file));
 
-            Visitor(std::ofstream &out) : out_(out) {}
-
-            void vertex(const State &q)
-            {
-                from_ = q;
-            }
-
-            void edge(const State &to)
-            {
-                addVisitedEdge(out_, from_[0], from_[1], to[0], to[1]);
-            }
-        };
-        planner.visitGraph(Visitor(file));
-#endif
-        endSvg(file);
-    }
-
-    /*
-     * Free the png variables
-     */
-
-    png_destroy_read_struct(&png, &info, NULL);
-    fclose(fp);
-    return 0;
-}
-
-inline void writePngFile(png_bytep *rowPointers, int width, int height)
-{
-    const std::string outputName = "png_planning_filtered.png";
-    MPT_LOG(INFO) << "Writing filtered png to " << outputName;
-    FILE *fp = fopen(outputName.c_str(), "wb");
-
-    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    png_infop info = png_create_info_struct(png);
-    if (setjmp(png_jmpbuf(png))) abort();
-
-    png_init_io(png, fp);
-
-    // Output is 8bit depth, RGB format.
-    png_set_IHDR(
-        png,
-        info,
-        width, height,
-        8,
-        PNG_COLOR_TYPE_RGB,
-        PNG_INTERLACE_NONE,
-        PNG_COMPRESSION_TYPE_DEFAULT,
-        PNG_FILTER_TYPE_DEFAULT
-    );
-    png_write_info(png, info);
-
-    png_write_image(png, rowPointers);
-    png_write_end(png, NULL);
-    fclose(fp);
-}
-
-
-inline std::vector<bool> filter(png_bytep *rowPointers, std::vector<PNGColor> &filters, int width, int height)
-{
-    std::vector<bool> obstacle(width * height);
-    const int tolerance = 15;
-    for(int y = 0; y < height; y++)
+    // draw the solution paths
+    if (!solution.empty())
     {
-        png_bytep row = rowPointers[y];
-        for(int x = 0; x < width; x++)
+        for(auto it = solution.begin(); it + 1 != solution.end() ; ++it)
         {
-            png_bytep px = &(row[x * 3]);
-            bool isObstacle = false;
-            // mark white as the obstacle
-            // TODO: move tolerance to the PNGColor class
-            if(px[0] > 250 && px[1] > 250 && px[2] > 250)
-            {
-                isObstacle = true;
-            }
-            for(auto const &c : filters)
-            {
-                if(c.isObstacle(px[0], px[1], px[2], tolerance))
-                {
-                    isObstacle = true;
-                    break;
-                }
-            }
-            obstacle[width * y + x] = isObstacle ? true : false;
-
-            if(PRINT_FILTERED_IMAGE)
-            {
-                px[0] = isObstacle ? 0 : 255;
-                px[1] = isObstacle ? 0 : 255;
-                px[2] = isObstacle ? 0 : 255;
-            }
+            const auto &from = *it;
+            const auto &to = *(it + 1);
+            addSolutionEdge(file, from[0], from[1], to[0], to[1], 10.0);
         }
     }
+    
 
-    return obstacle;
+    // add the start state and the end state.
+    addStartState(file, startState[0], startState[1], 40);
+    addGoalState(file, goalState[0], goalState[1], 40);
+
+    endSvg(file);
 }
