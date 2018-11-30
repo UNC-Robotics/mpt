@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     std::tie(obstacles, width, height) = readAndFilterPng(filters, inputName); 
 
     /*
-     *  3.  Set the start and goal states and initialize the scenario. 
+     *  3.  Set the start state and the goal state, then initialize scenario.  
      */
     State startState, goalState;
     startState << 430, 1300; 
@@ -153,7 +153,6 @@ inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::strin
             addSolutionEdge(file, from[0], from[1], to[0], to[1], 10.0);
         }
     }
-    
 
     // add the start state and the end state.
     addStartState(file, startState[0], startState[1], 40);

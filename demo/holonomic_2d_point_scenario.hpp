@@ -58,26 +58,14 @@ namespace mpt_demo {
         using Distance = typename Space::Distance;
         using Goal = unc::robotics::mpt::GoalState<Space>;
 
-        State startState() {
-            State q;
-            q.fill(10); 
-            return q;
-        }
-
-        State goalState() {
-            State q;
-            q << (Scalar) width_ - 10, (Scalar) height_ - 10;
-            return q;
-        }
-
     private:
         const int width_; 
         const int height_; 
-        Space space_;
-        Bounds bounds_;
-        Goal goal_;
         const std::vector<Circle<Scalar>> circles_;
         const std::vector<Rect<Scalar>> rects_;
+        Bounds bounds_;
+        Goal goal_;
+        Space space_;
 
         Bounds makeBounds() {
             Eigen::Matrix<Scalar, 2, 1> min, max;
@@ -88,16 +76,19 @@ namespace mpt_demo {
 
     public:
         Holonomic2DPointScenario(
+            int width, 
+            int height,
             std::vector<Circle<Scalar>> &circles, 
             std::vector<Rect<Scalar>> &rects,
-            int width = 512, 
-            int height = 512)
-            : width_(width),
+            State goalState
+            )
+            : 
+              width_(width),
               height_(height),
-              bounds_(makeBounds()),
-              goal_(1e-6, goalState()),
               circles_(circles),
-              rects_(rects)
+              rects_(rects),
+              bounds_(makeBounds()),
+              goal_(1e-6, goalState)
         {            
         }
 
