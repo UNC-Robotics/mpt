@@ -45,6 +45,20 @@
 
 namespace shape
 {
+    class Color
+    {
+    public:
+        Color(const int r, const int g, const int b)
+            : r(r), g(g), b(b) {}
+        Color()
+            : Color(255, 255, 255) {}
+    private:
+        const int r;
+        const int g;
+        const int b;
+        friend std::ostream &operator<<(std::ostream &, const Color &);
+    };
+
     inline std::string startTag(std::string tag)
     {
         return "<" + tag;
@@ -70,15 +84,15 @@ namespace shape
 
     inline void startSvg(std::ofstream &file, const int width, const int height)
     {
-        file << "<?xml version=\"1.0\" standalone=\"no\" ?>" << std::endl;
-        file << "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">" << std::endl;
-        file << startTag("svg");
-        file << addAttr("width", width, "px");
-        file << addAttr("height", height, "px");
-        file << addAttr("xmlns", "http://www.w3.org/2000/svg");
-        file << addAttr("xmlns:xlink", "http://www.w3.org/1999/xlink");
-        file << addAttr("version", "1.1");
-        file << ">\n";
+        file << "<?xml version=\"1.0\" standalone=\"no\" ?>" << std::endl
+             << "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">" << std::endl
+             << startTag("svg")
+             << addAttr("width", width, "px")
+             << addAttr("height", height, "px")
+             << addAttr("xmlns", "http://www.w3.org/2000/svg")
+             << addAttr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+             << addAttr("version", "1.1")
+             << ">\n";
     }
 
     inline void addImage(std::ofstream &file, const std::string &path)
@@ -92,98 +106,61 @@ namespace shape
         file.close();
     }
 
-    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 4.0)
-    {
+    inline void addEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width, Color c) {
         file << "\t"
              << startTag("line")
              << addAttr("x1", x1)
              << addAttr("y1", y1)
              << addAttr("x2", x2)
              << addAttr("y2", y2)
-             << addAttr("stroke", "rgb(250, 50, 50)")
+             << addAttr("stroke", c)
              << addAttr("stroke-width", width)
              << addAttr("stroke-linecap", "round")
-             << closeTag()
-             << std::endl;
+             << closeTag();       
+    }
+
+    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 4.0)
+    {
+        addEdge(file, x1, y1, x2, y2, width, Color(250, 50, 50));
     }
 
     inline void addVisitedEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 1.0)
     {
+        addEdge(file, x1, y1, x2, y2, width, Color(125, 125, 125));
+    }
+
+    inline void addState(std::ofstream &file, double x, double y, double r, char c) {
         file << "\t"
-             << startTag("line")
-             << addAttr("x1", x1)
-             << addAttr("y1", y1)
-             << addAttr("x2", x2)
-             << addAttr("y2", y2)
-             << addAttr("stroke", "rgb(125, 125, 125)")
-             << addAttr("stroke-width", width)
-             << addAttr("stroke-linecap", "round")
-             << closeTag()
-             << std::endl;
+             << startTag("circle")
+             << addAttr("cx", x)
+             << addAttr("cy", y)
+             << addAttr("r", r)
+             << addAttr("fill", "rgb(230, 230, 230)")
+             << addAttr("stroke", "red")
+             << addAttr("stroke-width", r / 5)
+             << closeTag();
+
+        // add the label
+        file << startTag("text")
+             << addAttr("x", x)
+             << addAttr("y", y + r / 3.0)
+             << addAttr("fill", "black")
+             << addAttr("text-anchor", "middle")
+             << addAttr("font-size", r)
+             << ">"
+             << ' ' << c << ' '
+             << closeTag("text");
     }
 
     inline void addStartState(std::ofstream &file, double x, double y, double r = 20)
     {
-
-        file << "\t"
-             << startTag("circle")
-             << addAttr("cx", x)
-             << addAttr("cy", y)
-             << addAttr("r", r)
-             << addAttr("fill", "rgb(230, 230, 230)")
-             << addAttr("stroke", "red")
-             << addAttr("stroke-width", r/4)
-             << closeTag();
-
-        // add the label
-        file << startTag("text")
-             << addAttr("x", x)
-             << addAttr("y", y+r/3.0)
-             << addAttr("fill", "black")
-             << addAttr("text-anchor", "middle")
-             << addAttr("font-size", r)
-             << ">"
-             << " S "
-             << closeTag("text");
+        addState(file, x, y, r, 'S');
     }
 
     inline void addGoalState(std::ofstream &file, double x, double y, double r = 20)
     {
-        file << "\t"
-             << startTag("circle")
-             << addAttr("cx", x)
-             << addAttr("cy", y)
-             << addAttr("r", r)
-             << addAttr("fill", "rgb(230, 230, 230)")
-             << addAttr("stroke", "red")
-             << addAttr("stroke-width", r/4)
-             << closeTag();
-
-        // add the label
-        file << startTag("text")
-             << addAttr("x", x)
-             << addAttr("y", y+r/3.0)
-             << addAttr("fill", "black")
-             << addAttr("text-anchor", "middle")
-             << addAttr("font-size", r)
-             << ">"
-             << " G "
-             << closeTag("text");
+        addState(file, x, y, r, 'G');
     }
-
-    class Color
-    {
-    public:
-        Color(const int r, const int g, const int b)
-            : r(r), g(g), b(b) {}
-        Color()
-            : Color(255, 255, 255) {}
-    private:
-        const int r;
-        const int g;
-        const int b;
-        friend std::ostream &operator<<(std::ostream &, const Color &);
-    };
 
     template <typename Scalar>
     class Rect
@@ -287,16 +264,30 @@ namespace shape
     template <typename Scalar>
     std::ostream &operator<<(std::ostream &strm, const Circle<Scalar> &c)
     {
-        return strm << '\t' << startTag("circle") << addAttr("cx", c.center_[0]) << addAttr("cy", c.center_[1])
-               << addAttr("r", c.radius_) << " fill='" << c.color_ << "'" << closeTag();
+        return strm << '\t'
+               << startTag("circle")
+               << addAttr("cx", c.center_[0])
+               << addAttr("cy", c.center_[1])
+               << addAttr("r", c.radius_)
+               << addAttr("fill", c.color_)
+               << addAttr("stroke", "black")
+               << addAttr("stroke-width", "1px")
+               << closeTag();
     }
 
     template <typename Scalar>
     std::ostream &operator<<(std::ostream &strm, const Rect<Scalar> &r)
     {
-        return strm << '\t' << startTag("rect") << addAttr("x", r.p0_[0]) << addAttr("y", r.p0_[1])
-               << addAttr("width", r.p1_[0] - r.p0_[0]) << addAttr("height", r.p1_[1] - r.p0_[1])
-               << " fill='" << r.color_ << "'" << closeTag();
+        return strm << '\t'
+               << startTag("rect")
+               << addAttr("x", r.p0_[0])
+               << addAttr("y", r.p0_[1])
+               << addAttr("width", r.p1_[0] - r.p0_[0])
+               << addAttr("height", r.p1_[1] - r.p0_[1])
+               << addAttr("fill", r.color_)
+               << addAttr("stroke", "black")
+               << addAttr("stroke-width", "1px")
+               << closeTag();
     }
 }
 #endif
