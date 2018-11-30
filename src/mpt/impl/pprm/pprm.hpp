@@ -382,7 +382,7 @@ namespace unc::robotics::mpt::impl::pprm {
         void visitGraph(Visitor&& visitor) const {
             for (const Node& n : nodePool_) {
                 visitor.vertex(n.state());
-                for (const Edge *e = n.edges() ; e ; e = e->next())
+                for (const Edge *e = n.edges() ; e ; e = e->next(std::memory_order_acquire))
                     visitor.edge(e->to()->state());
             }
         }

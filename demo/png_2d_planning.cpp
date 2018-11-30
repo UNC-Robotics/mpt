@@ -75,9 +75,9 @@ int main(int argc, char *argv[])
      *      For each pixel (x, y): if obstacles(y * width + x) is true, then 
      *      the pixel is an obstacle. Otherwise, it is not an obstacle.
      */
-    std::vector<bool> obstacles; 
-    int width, height; // width and the height of the input file.
-    std::tie(obstacles, width, height) = readAndFilterPng(filters, inputName); 
+    //std::vector<bool> obstacles; 
+    // int width, height; // width and the height of the input file.
+    auto [obstacles, width, height] = readAndFilterPng(filters, inputName); 
 
     /*
      *  3.  Set the start state and the goal state, then initialize scenario.  
