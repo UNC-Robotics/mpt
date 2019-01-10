@@ -54,6 +54,16 @@ namespace unc::robotics::mpt {
         {
         }
     };
+
+    template <class T, class M, class W, class Bounds>
+    auto measure(
+        const UniformSampler<Space<T, Scaled<M, W>>, Bounds>& sampler,
+        const Space<T, Scaled<M, W>>& space)
+    {
+        return measure(
+            static_cast<const UniformSampler<Space<T, M>, Bounds>&>(sampler),
+            space.space()) * space.weight();
+    }
 }
 
 #endif

@@ -63,7 +63,7 @@ namespace unc::robotics::mpt::impl {
             return q;
         }
     };
-
+    
     template <typename T, int p>
     struct SO2UniformSampler<T, p, -1> {
     private:
@@ -88,6 +88,15 @@ namespace unc::robotics::mpt::impl {
 }
 
 namespace unc::robotics::mpt {
+    template <class T, int p, int dim>
+    auto measure(
+        const impl::SO2UniformSampler<T, p, dim>&,
+        const nigh::metric::Space<T, SO2<p>>& space)
+    {
+        using Scalar = typename nigh::metric::Space<T, SO2<p>>::Distance;
+        return std::pow(2 * impl::PI<Scalar>, space.dimensions());
+    }
+    
     // template <typename T, int p>
     // struct UniformSampler<Space<T, SO2<p>>, Unbounded> {
     //     UniformSampler(const Space<T, SO2<p>>& space, Unbounded) {
