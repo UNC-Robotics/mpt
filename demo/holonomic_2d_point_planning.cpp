@@ -113,9 +113,9 @@ int main(int argc, char *argv[])
     startSvg(file, width, height);
 
     // add the obstacles to the svg file.
-    for(auto &circle : circles)
+    for (auto &circle : circles)
         file << circle;
-    for(auto &rect : rects)
+    for (auto &rect : rects)
         file << rect;
 
     // Visitor will be used to traverse the explored paths.
@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
     // Next, we traverse and draw the solution the path.
     if (!solution.empty())
     {
-        for(auto it = solution.begin(); it + 1 != solution.end() ; ++it)
+        for (auto it = solution.begin(); it + 1 != solution.end() ; ++it)
         {
             const auto &from = *it;
             const auto &to = *(it + 1);

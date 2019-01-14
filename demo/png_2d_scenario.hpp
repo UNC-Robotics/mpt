@@ -60,7 +60,7 @@ namespace mpt_demo
 
         bool isObstacle(int r, int g, int b) const
         {
-            if((r < r_ - tol_ || r > r_ + tol_) || (g < g_ - tol_ || g > g_ + tol_) || (b < b_ - tol_ || b > b_ + tol_))
+            if ((r < r_ - tol_ || r > r_ + tol_) || (g < g_ - tol_ || g > g_ + tol_) || (b < b_ - tol_ || b > b_ + tol_))
             {
                 return false;
             }
@@ -141,19 +141,17 @@ namespace mpt_demo
 
         bool validSegment(const State &a, const State &b) const
         {
-            // uses bisection method to verify links.
+            // uses the bisection method to verify links.
             State mid = (a + b) / 2;
             Scalar distSquared = (b - a).squaredNorm();
             Scalar tolerance = 1;
-            if(distSquared < tolerance * tolerance)
+            if (distSquared < tolerance * tolerance)
                 return true;
-            if(!valid(mid))
+            if (!valid(mid))
                 return false;
-            bool left = validSegment(a, mid);
-            if(!left)
+            if (!validSegment(a, mid)) // check the left half
                 return false;
-            bool right = validSegment(mid, b);
-            return right;
+            return validSegment(mid, b); // check the right half
         }
     };
 
@@ -169,7 +167,6 @@ namespace mpt_demo
 
         png_init_io(png, fp);
 
-        // Output is 8bit depth, RGB format.
         png_set_IHDR(
             png,
             info,
@@ -203,13 +200,13 @@ namespace mpt_demo
         png_byte bit_depth  = png_get_bit_depth(png, info);
 
         // resolve pallete img to rgb
-        if(color_type == PNG_COLOR_TYPE_PALETTE)
+        if (color_type == PNG_COLOR_TYPE_PALETTE)
             png_set_palette_to_rgb(png);
 
         // restrict 1 byte per pixel
-        if(bit_depth == 16)
+        if (bit_depth == 16)
             png_set_strip_16(png);
-        if(bit_depth < 8)
+        if (bit_depth < 8)
             png_set_packing(png);
 
         // strip alpha channel
@@ -221,7 +218,6 @@ namespace mpt_demo
         /*
          * allocate the bitmap
          */
-
         int width = png_get_image_width(png, info);
         int height = png_get_image_height(png, info);
         int rowBytes = png_get_rowbytes(png, info);
@@ -240,17 +236,17 @@ namespace mpt_demo
         std::vector<bool> obstacles;
         obstacles.reserve(width * height);
         const int tolerance = 15;
-        for(int y = 0; y < height; y++)
+        for (int y = 0; y < height; y++)
         {
             png_bytep row = rowPointers[y];
-            for(int x = 0; x < width; x++)
+            for (int x = 0; x < width; x++)
             {
                 png_bytep px = &(row[x * 3]);
                 bool isObstacle = false;
 
-                for(auto const &c : filters)
+                for (auto const &c : filters)
                 {
-                    if(c.isObstacle(px[0], px[1], px[2]))
+                    if (c.isObstacle(px[0], px[1], px[2]))
                     {
                         isObstacle = true;
                         break;
@@ -258,7 +254,7 @@ namespace mpt_demo
                 }
                 obstacles.push_back(isObstacle ? true : false);
 
-                if(PRINT_FILTERED_IMAGE)
+                if (PRINT_FILTERED_IMAGE)
                 {
                     px[0] = isObstacle ? 0 : 255;
                     px[1] = isObstacle ? 0 : 255;
@@ -267,7 +263,7 @@ namespace mpt_demo
             }
         }
 
-        if(PRINT_FILTERED_IMAGE)
+        if (PRINT_FILTERED_IMAGE)
             writePngFile(rowPointers.data(), width, height);
 
         png_destroy_read_struct(&png, &info, NULL);

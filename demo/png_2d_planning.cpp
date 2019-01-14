@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::string &inputName, int width, int height, State &startState, State &goalState)
 {
     std::vector<State> solution = planner.solution();
-    if(solution.empty())
+    if (solution.empty())
     {
         MPT_LOG(INFO) <<  "No solution was found";
         return;
@@ -146,7 +146,7 @@ inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::strin
     // draw the solution paths
     if (!solution.empty())
     {
-        for(auto it = solution.begin(); it + 1 != solution.end() ; ++it)
+        for (auto it = solution.begin(); it + 1 != solution.end() ; ++it)
         {
             const auto &from = *it;
             const auto &to = *(it + 1);

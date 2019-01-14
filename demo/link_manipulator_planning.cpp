@@ -102,8 +102,6 @@ int main()
     file << "data = " << std::endl;
     file << "{" << std:: endl;
 
-    // TODO: what if no solution is found?
-
     // 1. radius
     file << "\t\"radius\": " << radius << "," << std::endl << std::endl;
 
