@@ -1,0 +1,213 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Link</title>
+</head>
+<body>
+    <h2>Link Manipulator Demo</h2>
+
+    <button onclick="start()">Start</button> 
+    <button onclick="pause()">Pause</button> 
+    <button onclick="resume()">Resume</button> 
+    <button onclick="reset()">Reset</button> 
+    <br>Show Shadow: <input type="checkbox" id="shadow" onclick="shadow()" checked> 
+    <br>Animation Speed: <input type="range" min="5" max="25" value="15" id="speed">
+    <br>Shadow Sampling Rate: <input type="range" min="2" max="16" value="9" id="sampleRate">
+    <br> <br>
+    <svg version='1.1' width='500' height='500' xmlns='http://www.w3.org/2000/svg'>
+        <rect width="100%" height="100%" fill="white" stroke="black" stroke-width="1"></rect>
+        <g id="shadows" stroke-linecap="round" fill="none" stroke-linejoin="round"></g>
+        <path id = "arm" stroke ="black" stroke-linecap="round" fill="none" stroke-linejoin="round"> </path>
+    </svg>
+    <script src = ./build/Release/solution.js> </script>
+    <script>
+        var dim = data.dimension;
+        var armLengths = data.armLengths;
+        var lengthSum = data.lengthSum;
+
+        var svg = document.getElementsByTagName('svg')[0];
+
+        var boxLowerBound = -(lengthSum + data.radius * 2 + 2);
+        var boxWidth = -2 * boxLowerBound;
+        var viewBox = boxLowerBound + " " + boxLowerBound + " " + boxWidth + " " + boxWidth;
+        svg.setAttribute("viewBox", viewBox);
+
+        var elmt = document.getElementsByTagName('rect')[0];
+        elmt.setAttribute("x", boxLowerBound);
+        elmt.setAttribute("y", boxLowerBound);
+
+        var elmt = document.getElementById("arm");
+        elmt.setAttribute("stroke", "black");
+        elmt.setAttribute("stroke-linecap", "round");
+        elmt.setAttribute("stroke-width", 2 * data.radius);
+
+        for (let c of data.circles) {
+            var elmt = document.createElementNS("http://www.w3.org/2000/svg", 'circle');
+            elmt.setAttribute("cx", c.cx);
+            elmt.setAttribute("cy", c.cy);
+            elmt.setAttribute("r", c.r);
+            elmt.setAttribute("fill", "rgb(80, 80, 80)");
+            svg.appendChild(elmt);
+        }
+
+        function moveArm(state) {
+            var elmt = document.getElementById("arm");
+            var d = "M0 0 ";
+            var angle = 0.0;
+            for (var i = 0; i < dim; ++i)
+            {
+                angle += state[i];
+                dx = armLengths[i] * Math.cos(angle);
+                dy = armLengths[i] * Math.sin(angle);
+                d = d + "l" + dx + " " + dy + " ";
+            }
+            elmt.setAttribute("d", d);
+        }
+
+        function drawState(state, opacity = 250) {
+            var elmt = document.createElementNS("http://www.w3.org/2000/svg", 'path');
+            elmt.setAttribute("stroke", "rgb(" + opacity + "," + opacity + "," + opacity + ")");
+            elmt.setAttribute("stroke-width", 2 * data.radius);
+            var d = "M0 0 ";
+            var angle = 0.0;
+            for (var i = 0; i < dim; ++i)
+            {
+                angle += state[i];
+                dx = armLengths[i] * Math.cos(angle);
+                dy = armLengths[i] * Math.sin(angle);
+                d = d + "l" + dx + " " + dy + " ";
+            }
+            elmt.setAttribute("d", d);
+            document.getElementById("shadows").appendChild(elmt);
+        }
+
+        moveArm(data.solution[0]);
+
+        // Control Variables
+        var animationOn = false;
+        var paused = false;
+        var interval = 15;
+        var sampleRate = 9; // # of shadows between each states
+        const tol = 0.005;
+
+        // Animation variables
+        var curStateIdx;
+        var curDraw;
+        var interpolatedState = new Array(dim);
+        var fromState, toState, diff, drawCount;    
+
+        function absoluteAvg(arr) {
+            var sum = 0.0;
+            for (var i = 0; i < arr.length; ++i) 
+                sum += Math.abs(arr[i]);
+            return sum / arr.length;
+        }
+
+        function getDiff(from, to) {
+            var diff = new Array(dim);
+            for (var i = 0; i < dim; ++i) 
+                diff[i] = to[i] - from[i];
+            return diff;
+        }
+
+        function updateState() {
+            curDraw = 0;
+            fromState = data.solution[curStateIdx];
+            toState = data.solution[curStateIdx + 1];
+            diff = getDiff(fromState, toState);
+            drawCount = Math.floor(absoluteAvg(diff) / tol);
+        }
+
+        function startAnimation() {
+            if (paused || animationOn)
+                return;
+
+            curStateIdx = 0;
+            updateState();
+            clearShadow();
+            animationOn = true;
+            drawNext();  
+        }
+
+        function drawNext() {
+            if (!animationOn) {
+                // animation turned off by the reset button
+                paused = false;
+                curStateIdx = 0;
+                moveArm(data.solution[0]);
+                return;
+            } else if (!paused) {
+                if (curDraw == drawCount) {
+                    if (curStateIdx == data.solution.length - 2) {  
+                        paused = false;
+                        animationOn = false; 
+                        moveArm(data.solution[data.solution.length - 1]);
+                        return;
+                    } else {
+                        ++curStateIdx;
+                        updateState();        
+                    }
+                }
+                for (var i = 0; i < dim; ++i) 
+                    interpolatedState[i] = fromState[i] + diff[i] * (curDraw / drawCount);
+
+                // opacity decreases from 230~80
+                if (curDraw % Math.ceil(drawCount / sampleRate) == 0){
+                    var opacity = 230 - (150 / (data.solution.length - 1)) * (curStateIdx + curDraw / drawCount)
+                    drawState(interpolatedState, opacity);
+                }
+                moveArm(interpolatedState);
+                ++curDraw;
+            }
+            setTimeout(function() {drawNext()}, interval);
+        }
+
+        function start() {
+            startAnimation();
+        }
+
+        function reset() {
+            clearShadow();
+            animationOn = false;
+            moveArm(data.solution[0]);
+        }
+
+        function pause() {
+            if (animationOn)
+                paused = true;
+        }        
+
+        function resume() {
+            if (animationOn && paused)
+                paused = false;
+        }
+
+        function shadow() {
+            var checkBox = document.getElementById("shadow");
+            var el = document.getElementById("shadows")
+            if (checkBox.checked)
+                el.setAttribute("visibility", "visible");
+            else
+                el.setAttribute("visibility", "hidden");
+        }
+
+        function clearShadow() {
+            var el = document.getElementById("shadows");
+            while (el.firstElementChild) 
+                el.removeChild(el.firstElementChild);
+        }
+
+        var speedSlider = document.getElementById("speed");
+        speedSlider.oninput = function() {
+            interval = 30 - this.value;
+        }
+
+        var sampleRateSlider = document.getElementById("sampleRate");
+        sampleRateSlider.oninput = function() {
+            sampleRate = this.value;
+        }
+        
+    </script>
+</body>
+</html>

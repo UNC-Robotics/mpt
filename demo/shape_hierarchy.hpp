@@ -95,7 +95,7 @@ namespace shape
              << ">\n";
     }
 
-    inline void addImage(std::ofstream &file, const std::string &path)
+    inline void addBackgroundImg(std::ofstream &file, const std::string &path)
     {
         file << '\t' << startTag("image") << addAttr("xlink:href", path) << closeTag();
     }
@@ -106,7 +106,8 @@ namespace shape
         file.close();
     }
 
-    inline void addEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width, Color c) {
+    inline void addEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width, Color c)
+    {
         file << "\t"
              << startTag("line")
              << addAttr("x1", x1)
@@ -116,12 +117,12 @@ namespace shape
              << addAttr("stroke", c)
              << addAttr("stroke-width", width)
              << addAttr("stroke-linecap", "round")
-             << closeTag();       
+             << closeTag();
     }
 
-    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 4.0)
+    inline void addSolutionEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 4.0, Color color = Color(250, 50, 50))
     {
-        addEdge(file, x1, y1, x2, y2, width, Color(250, 50, 50));
+        addEdge(file, x1, y1, x2, y2, width, color);
     }
 
     inline void addVisitedEdge(std::ofstream &file, double x1, double y1, double x2, double y2, double width = 1.0)
@@ -129,7 +130,8 @@ namespace shape
         addEdge(file, x1, y1, x2, y2, width, Color(125, 125, 125));
     }
 
-    inline void addState(std::ofstream &file, double x, double y, double r, char c) {
+    inline void addState(std::ofstream &file, double x, double y, double r, char c)
+    {
         file << "\t"
              << startTag("circle")
              << addAttr("cx", x)
@@ -141,7 +143,8 @@ namespace shape
              << closeTag();
 
         // add the label
-        file << startTag("text")
+        file << "\t"
+             << startTag("text")
              << addAttr("x", x)
              << addAttr("y", y + r / 3.0)
              << addAttr("fill", "black")
@@ -180,7 +183,7 @@ namespace shape
 
         bool segmentIsValid(const State &a, const State &b) const
         {
-            if(!pointIsValid(a) || !pointIsValid(b))
+            if (!pointIsValid(a) || !pointIsValid(b))
                 return false;
             return bisectSegment(a, b);
         }
@@ -190,15 +193,13 @@ namespace shape
             State mid = (a + b) / 2;
             Scalar distSquared = (b - a).squaredNorm();
             Scalar tolerance = 1;
-            if(distSquared < tolerance * tolerance)
+            if (distSquared < tolerance * tolerance)
                 return true;
-            if(!pointIsValid(mid))
+            if (!pointIsValid(mid))
                 return false;
-            bool left = bisectSegment(a, mid);
-            if(!left)
+            if (!bisectSegment(a, mid)) // check the left half
                 return false;
-            bool right = bisectSegment(mid, b);
-            return right;
+            return bisectSegment(mid, b); // check the right half 
         }
 
     private:
@@ -233,6 +234,21 @@ namespace shape
         bool segmentIsValid(const State &a, const State &b, Scalar robotRadius) const
         {
             return distPointSegmentSquared(center_, a, b) > (radius_ + robotRadius) * (radius_ + robotRadius);
+        }
+
+        Scalar cx() const
+        {
+            return center_[0];
+        }
+
+        Scalar cy() const
+        {
+            return center_[1];
+        }
+
+        Scalar r() const
+        {
+            return radius_;
         }
 
     private:
@@ -271,7 +287,7 @@ namespace shape
                << addAttr("r", c.radius_)
                << addAttr("fill", c.color_)
                << addAttr("stroke", "black")
-               << addAttr("stroke-width", "1px")
+               << addAttr("stroke-width", "0px") //TODO: find the right stroke width
                << closeTag();
     }
 
