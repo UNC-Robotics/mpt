@@ -38,6 +38,8 @@
 #include <vector>
 #include <png.h>
 #include <mpt/prrt_star.hpp>
+#include <mpt/prrt.hpp>
+#include <mpt/pprm.hpp>
 
 using namespace mpt_demo;
 using namespace unc::robotics::mpt;
@@ -50,12 +52,13 @@ using State = Eigen::Matrix<Scalar, 2, 1>;
 using Algorithm = PRRTStar<>;
 using Scenario = PNG2dScenario<Scalar>;
 
+const std::string inputName = "../../png_planning_input.png";
+
 // draws the result to a svg file.
-void writeSvgFile(Planner<Scenario, Algorithm>&, const std::string&, int, int, State&, State&);
+void writeSvgFile(Planner<Scenario, Algorithm> &, Scenario &, State &, State &);
 
 int main(int argc, char *argv[])
 {
-    std::string inputName = "../../png_planning_input.png";
 
     /*
      *  1.  Choose the obstacle colors to be filtered.
@@ -72,42 +75,39 @@ int main(int argc, char *argv[])
      *  2.  Read and filter the input image.
      *
      *      boolean vector "obstacles" will be used to track the obstacles.
-     *      For each pixel (x, y): if obstacles(y * width + x) is true, then 
-     *      the pixel is an obstacle. Otherwise, it is not an obstacle.
+     *      For each pixel (x, y), it is an obstacle iff obstacles(y * width + x).
      */
-    //std::vector<bool> obstacles; 
-    // int width, height; // width and the height of the input file.
-    auto [obstacles, width, height] = readAndFilterPng(filters, inputName); 
+    auto [obstacles, width, height] = readAndFilterPng(filters, inputName);
 
     /*
-     *  3.  Set the start state and the goal state, then initialize scenario.  
+     *  3.  Set the start state and the goal state, then initialize scenario.
      */
     State startState, goalState;
-    startState << 430, 1300; 
-    goalState << 3150, 950; 
+    startState << 430, 1300;
+    goalState << 3150, 950;
 
     Scenario scenario(width, height, goalState, obstacles);
 
     /*
      *  4.  Initialize and run the planner.
      *
-     *      We initialize the planner with the scenario above. Then, we add the 
-     *      start state and run the planner for MAX_SOLVE_TIME (milliseconds).  
+     *      We initialize the planner with the scenario above. Then, we add the
+     *      start state and run the planner for MAX_SOLVE_TIME (milliseconds).
      *      Planner will use the specified algorithm to explore possible paths
      *      from the start to the goal state in the given scenario.
      */
     static constexpr auto MAX_SOLVE_TIME = 50ms; // maximum runtime allotted for the planner.
     Planner<Scenario, Algorithm> planner(scenario);
-    planner.addStart(startState);  
+    planner.addStart(startState);
     planner.solveFor(MAX_SOLVE_TIME);
     planner.printStats();
 
-    writeSvgFile(planner, inputName, width, height, startState, goalState); // write the result to svg.
+    writeSvgFile(planner, scenario, startState, goalState); // write the result to svg.
 
     return 0;
 }
 
-inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::string &inputName, int width, int height, State &startState, State &goalState)
+inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, Scenario &scenario, State &start, State &goal)
 {
     std::vector<State> solution = planner.solution();
     if (solution.empty())
@@ -116,14 +116,17 @@ inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::strin
         return;
     }
 
-    const std::string outputName = "png_2d_demo.svg";
+    const std::string outputName = "png_2d_demo_output.svg";
     std::ofstream file(outputName);
-    startSvg(file, width, height);
-    addImage(file, inputName);
+    startSvg(file, scenario.width(), scenario.height());
+    addBackgroundImg(file, inputName);
 
     MPT_LOG(INFO) << "Writing the solution to " << outputName;
 
-    // draw the visited paths
+    // Struct Visitor will be used to traverse the explored paths.
+    //
+    // It must supply two functions: vertex and edge. Vertex(q) should set the current node (from_) to q. 
+    // Then, the planner calls edge(to) to add each edge(from_, to) to the svg file.
     struct Visitor
     {
         std::ofstream &out_;
@@ -138,7 +141,7 @@ inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::strin
 
         void edge(const State &to)
         {
-            addVisitedEdge(out_, from_[0], from_[1], to[0], to[1]);
+            addVisitedEdge(out_, from_[0], from_[1], to[0], to[1], 0.3);
         }
     };
     planner.visitGraph(Visitor(file));
@@ -155,8 +158,8 @@ inline void writeSvgFile(Planner<Scenario, Algorithm> &planner, const std::strin
     }
 
     // add the start state and the end state.
-    addStartState(file, startState[0], startState[1], 40);
-    addGoalState(file, goalState[0], goalState[1], 40);
+    addStartState(file, start[0], start[1], 40);
+    addGoalState(file, goal[0], goal[1], 40);
 
     endSvg(file);
 }
