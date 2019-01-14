@@ -28,12 +28,27 @@ TEST(prrt_star_until_solved_with_linear) {
     testSolvingBasicScenario<PRRTStar<nigh::Linear>>();
 }
 
+TEST(prrt_start_until_solved_r_nearest) {
+    testSolvingBasicScenario<PRRTStar<rewire_r_nearest>>();
+}
+
+TEST(prrt_start_until_solved_k_nearest) {
+    testSolvingBasicScenario<PRRTStar<rewire_k_nearest>>();
+}
+
 TEST(prrt_star_options_parser) {
     // The options parser should resolve the following two planners to
     // the same concrete type.
     using Scenario = BasicScenario<>;
-    using A = mpt::Planner<Scenario, PRRTStar<nigh::Linear, single_threaded, report_stats<true>>>;
-    using B = mpt::Planner<Scenario, PRRTStar<single_threaded, report_stats<true>, nigh::Linear>>;
+    using A = mpt::Planner<Scenario, PRRTStar<nigh::Linear, rewire_r_nearest, single_threaded, report_stats<true>>>;
+    using B = mpt::Planner<Scenario, PRRTStar<single_threaded, report_stats<true>, nigh::Linear, rewire_r_nearest>>;
+    EXPECT((std::is_same_v<A, B>)) == true;
+}
+
+TEST(prrt_star_options_default) {
+    using Scenario = BasicScenario<>;
+    using A = mpt::Planner<Scenario, PRRTStar<rewire_k_nearest, report_stats<false>, max_threads<0>>>;
+    using B = mpt::Planner<Scenario, PRRTStar<>>;
     EXPECT((std::is_same_v<A, B>)) == true;
 }
 

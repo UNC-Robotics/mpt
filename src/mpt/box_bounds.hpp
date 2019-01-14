@@ -85,6 +85,10 @@ namespace unc::robotics::mpt {
             return bounds_.col(1);
         }
 
+        S measure() const {
+            return (max() - min()).prod();
+        }
+
         unsigned size() const {
             return bounds_.rows();
         }

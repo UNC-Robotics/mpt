@@ -46,14 +46,14 @@
 namespace unc::robotics::mpt::impl {
     template <typename T>
     struct SO3UniformSampler {
-        SO3UniformSampler(const Space<T, SO3>&, Unbounded = Unbounded{}) {
+        using Space = Space<T, SO3>;
+        using Distance = typename Space::Distance;
+        
+        SO3UniformSampler(const Space&, Unbounded = Unbounded{}) {
         }
 
         template <typename RNG>
         T operator() (RNG& rng) const {
-            using Space = Space<T, SO3>;
-            using Distance = typename Space::Distance;
-
             std::uniform_real_distribution<Distance> dist01(0, 1);
             std::uniform_real_distribution<Distance> dist2pi(0, 2*PI<Distance>);
             Distance a = dist01(rng);
@@ -74,6 +74,13 @@ namespace unc::robotics::mpt {
     struct UniformSampler<Space<T, SO3>, Unbounded> : impl::SO3UniformSampler<T> {
         using impl::SO3UniformSampler<T>::SO3UniformSampler;
     };
+
+    template <typename T>
+    auto measure(const UniformSampler<Space<T, SO3>, Unbounded>&, const Space<T, SO3>&) {
+        using Distance = typename Space<T,SO3>::Distance;
+        // half of the surface area of a unit 3-sphere.
+        return impl::PI<Distance> * impl::PI<Distance>;
+    }
 }
 
 

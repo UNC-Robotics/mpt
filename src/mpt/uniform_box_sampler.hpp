@@ -66,7 +66,16 @@ namespace unc::robotics::mpt {
             }
             return q;
         }
+
+        const BoxBounds<Scalar, dimensions>& bounds() const {
+            return bounds_;
+        }
     };
+
+    template <class Space>
+    auto measure(const UniformBoxSampler<Space>& sampler, const Space&) {
+        return sampler.bounds().measure();
+    }
 }
 
 #endif

@@ -48,32 +48,36 @@ namespace unc::robotics::mpt {
 
     namespace impl {
         // this is the actual strategy type for a PRRTStar planner
-        template <int maxThreads, bool kNearest, bool reportStats, typename NNStrategy>
+        template <int maxThreads, class Rewire, bool reportStats, typename NNStrategy>
         struct PRRTStarStrategy {};
 
         // Option parser to generate a PRRTStarStrategy from a
         // collection of unordered options.
         template <typename ... Options>
         struct PRRTStarOptions {
-          static constexpr int maxThreads = pack_int_tag_v<max_threads, 0, Options...>;
+            static constexpr int maxThreads = pack_int_tag_v<max_threads, 0, Options...>;
             static constexpr bool kNearest = pack_contains_v<rewire_k_nearest, Options...>;
             static constexpr bool rNearest = pack_contains_v<rewire_r_nearest, Options...>;
             static constexpr bool reportStats = pack_bool_tag_v<report_stats, false, Options...>;
 
             static_assert(!(kNearest && rNearest), "RRT* tags cannot include both k_nearest and r_nearest");
 
+            // This is not the most eligant way, but it gets the job
+            // done for now (at least until we add more rewiring options)
+            using Rewire = std::conditional_t<!rNearest, rewire_k_nearest, rewire_r_nearest>;
+
             using NNStrategy = pack_nearest_t<Options...>;
 
-            using type = PRRTStarStrategy<maxThreads, !rNearest, reportStats, NNStrategy>;
+            using type = PRRTStarStrategy<maxThreads, Rewire, reportStats, NNStrategy>;
         };
 
-        template <typename Scenario, int maxThreads, bool kNearest, bool reportStats, typename NNStrategy>
+        template <typename Scenario, int maxThreads, class Rewire, bool reportStats, typename NNStrategy>
         struct PlannerResolver<
             Scenario,
             impl::PRRTStarStrategy<
-                maxThreads, kNearest, reportStats, NNStrategy>> {
+                maxThreads, Rewire, reportStats, NNStrategy>> {
             using type = impl::prrt_star::PRRTStar<
-                Scenario, maxThreads, kNearest, reportStats,
+                Scenario, maxThreads, Rewire, reportStats,
                 nearest_strategy_t<Scenario, maxThreads, NNStrategy>>;
         };
     }

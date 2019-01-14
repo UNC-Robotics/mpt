@@ -78,6 +78,7 @@ namespace unc::robotics::mpt::impl {
             return q;
         }
     };
+
 }
 
 namespace unc::robotics::mpt {
@@ -87,6 +88,14 @@ namespace unc::robotics::mpt {
     {
         using impl::CartesianUniformSampler<T, Cartesian<M...>, Bounds, std::index_sequence_for<M...>>::CartesianUniformSampler;
     };
+
+    template <class T, class M, class Bounds, std::size_t ... I>
+    auto measure(
+        const impl::CartesianUniformSampler<T, M, Bounds, std::index_sequence<I...>>& sampler,
+        const Space<T, M>& space)
+    {
+        return (measure(std::get<I>(sampler), std::get<I>(space)) * ...);
+    }
 }
 
 #endif

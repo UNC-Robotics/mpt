@@ -46,6 +46,7 @@
 #include "../link_trajectory.hpp"
 #include "../object_pool.hpp"
 #include "../planner_base.hpp"
+#include "../rrg_rewire_neighbors.hpp"
 #include "../scenario_goal.hpp"
 #include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
@@ -153,8 +154,8 @@ namespace unc::robotics::mpt::impl::prrt_star {
         }
     };
 
-    template <typename Scenario, int maxThreads, bool kNearest, bool reportStats, typename NNStrategy>
-    class PRRTStar : public PlannerBase<PRRTStar<Scenario, maxThreads, kNearest, reportStats, NNStrategy>> {
+    template <typename Scenario, int maxThreads, class Rewire, bool reportStats, typename NNStrategy>
+    class PRRTStar : public PlannerBase<PRRTStar<Scenario, maxThreads, Rewire, reportStats, NNStrategy>> {
         using Planner = PRRTStar;
         using Base = PlannerBase<Planner>;
         using Space = scenario_space_t<Scenario>;
@@ -172,7 +173,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
         Distance maxDistance_{std::numeric_limits<Distance>::infinity()};
         Distance goalBias_{0.01};
         Distance rewireFactor_{1.1};
-        Distance kRRT_{0};
+        RRGRewireNeighbors<Rewire, Space> rewireNeighbors_;
 
         // maximum number of goals before goal bias sampling stops.
         std::size_t maxGoals_{1};
@@ -199,15 +200,6 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return Clock::now() - solveStartTime_;
         }
 
-        void calculateRewiringLowerBounds() {
-            Distance dim = static_cast<Distance>(workers_[0].space().dimensions());
-            kRRT_ = rewireFactor_ * E<Distance> * (1 + 1/dim);
-        }
-
-        unsigned rewireCount() const {
-            return std::ceil(kRRT_ * std::log(Distance(nn_.size() + 1)));
-        }
-
         void foundGoal(Edge *edge, Distance) {
             ++goalCount_;
             MPT_LOG(DEBUG) << "added goal";
@@ -228,13 +220,22 @@ namespace unc::robotics::mpt::impl::prrt_star {
         // required constructor
         template <typename RNGSeed = RandomDeviceSeed<>>
         explicit PRRTStar(const Scenario& scenario = Scenario(), const RNGSeed& seed = RNGSeed())
-            : nn_(scenario.space())
+            : rewireNeighbors_(Sampler(scenario), scenario.space(), rewireFactor_)
+            , nn_(scenario.space())
             , workers_(scenario, seed)
         {
-            calculateRewiringLowerBounds();
+            // calculateRewiringLowerBounds();
 
             MPT_LOG(TRACE) << "Using nearest: " << log::type_name<NNStrategy>();
             MPT_LOG(TRACE) << "Using sampler: " << log::type_name<Sampler>();
+        }
+
+        void setRewireFactor(Distance factor) {
+            assert(0 < factor && !std::isnan(factor));
+            rewireFactor_ = factor;
+            const Scenario& scenario = workers_[0].scenario();
+            rewireNeighbors_ = RRGRewireNeighbors<Rewire, Space>(
+                Sampler(scenario), scenario.space(), factor);
         }
 
         void setGoalBias(Distance bias) {
@@ -288,7 +289,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
                 throw std::runtime_error("there are no valid initial states");
 
             if constexpr (reportStats)
-                MPT_LOG(DEBUG) << "initial k-nearest value of " << rewireCount();
+                MPT_LOG(DEBUG) << "initial rewire: " << rewireNeighbors_.stats(nn_.size());
 
             MPT_LOG(DEBUG) << "range = " << maxDistance_;
             MPT_LOG(DEBUG) << "goalBias = " << goalBias_;
@@ -298,7 +299,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
             workers_.solve(*this, doneFn);
 
             if constexpr (reportStats) {
-                MPT_LOG(DEBUG) << "final k-nearest value of " << rewireCount();
+                MPT_LOG(DEBUG) << "final rewire: " << rewireNeighbors_.stats(nn_.size());
                 if (Edge* solution = solution_.load(std::memory_order_relaxed))
                     MPT_LOG(INFO) << "final solution cost " << solution->cost();
                 else
@@ -391,8 +392,8 @@ namespace unc::robotics::mpt::impl::prrt_star {
         }
     };
 
-    template <typename Scenario, int maxThreads, bool kNearest, bool reportStats, typename NNStrategy>
-    class PRRTStar<Scenario, maxThreads, kNearest, reportStats, NNStrategy>::Worker
+    template <typename Scenario, int maxThreads, class Rewire, bool reportStats, typename NNStrategy>
+    class PRRTStar<Scenario, maxThreads, Rewire, reportStats, NNStrategy>::Worker
         : public WorkerStats<reportStats>
     {
         using Stats = WorkerStats<reportStats>;
@@ -421,6 +422,10 @@ namespace unc::robotics::mpt::impl::prrt_star {
             , scenario_(scenario)
             , rng_(seed)
         {
+        }
+
+        const Scenario& scenario() const {
+            return scenario_;
         }
 
         decltype(auto) space() const {
@@ -538,14 +543,13 @@ namespace unc::robotics::mpt::impl::prrt_star {
             Edge* parent = nearNode->edge(std::memory_order_relaxed);
             Distance parentCost = parent->cost() + dNear; // scenario_.space().distance(nearNode->state(), newState);
 
-            unsigned k = planner.rewireCount();
             // TODO: OMPL restricts rewiring considerations to
             // planner.maxDistance_, but only in the k-nearest
             // variant.  Their restiction seems incorrect for
             // asymptotic optimality.
             {
                 Timer timer(Stats::nearestK());
-                planner.nn_.nearest(nbh_, newState, k /*, planner.maxDistance_ */);
+                planner.rewireNeighbors_(nbh_, planner.nn_, newState);
             }
 
             Stats::rewireTests(nbh_.size());
