@@ -33,6 +33,7 @@ if (OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+
 foreach (nn KDTreeBatch GNAT)
     foreach (scalar float double)
         foreach (mt 0 1)
@@ -56,6 +57,7 @@ foreach (nn KDTreeBatch GNAT)
     endforeach(scalar)
 endforeach(nn)
 
+
 set(trgt holonomic_2d_point_planning)
 add_executable(${trgt} holonomic_2d_point_planning.cpp)
 target_link_libraries(${trgt} Eigen3::Eigen)
@@ -64,3 +66,7 @@ set(trgt png_2d_planning)
 add_executable(${trgt} png_2d_planning.cpp)
 target_link_libraries(${trgt} Eigen3::Eigen ${PNG_LIBRARY})
 
+
+set(trgt link_maipulator_planning)
+add_executable(${trgt} link_manipulator_planning.cpp)
+target_link_libraries(${trgt} Eigen3::Eigen)
