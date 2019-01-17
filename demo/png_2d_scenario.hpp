@@ -130,6 +130,16 @@ namespace mpt_demo
         {
             return goal_;
         }
+
+        const int width() const
+        {
+            return width_;
+        }
+
+        const int height() const
+        {
+            return height_;
+        }
     private:
         Bounds makeBounds()
         {
@@ -185,7 +195,7 @@ namespace mpt_demo
     }
 
 
-    inline std::tuple<std::vector<bool>, int, int> readAndFilterPng(std::vector<FilterColor> &filters, std::string &inputName)
+    inline std::tuple<std::vector<bool>, int, int> readAndFilterPng(std::vector<FilterColor> &filters, const std::string &inputName)
     {
         /*
          * Read png file
