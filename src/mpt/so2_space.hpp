@@ -39,5 +39,29 @@
 
 #include <nigh/so2_space.hpp>
 #include "impl/metrics.hpp"
-
+#include <iostream>
+namespace unc::robotics::mpt {
+    template <typename T, int p>
+    T interpolate(
+        const Space<T, SO2<p>>& space, const T& a, const T& b,
+        typename Space<T, SO2<p>>::Distance d)
+    {
+        using namespace unc::robotics::nigh::impl;
+        using S = Space<T, SO2<p>>;
+        using Scalar = typename S::Distance;
+        T q;
+        for (unsigned i=0; i < space.dimensions(); ++i) {
+            Scalar ccwDist = so2::ccwDist(S::coeff(a, i), S::coeff(b, i));
+            if (ccwDist < PI<Scalar>) {
+                // angular distance is in ccw direction from a to b
+                S::coeff(q, i) = so2::bound(S::coeff(a, i) + ccwDist * d); 
+            } else {
+                // angular distance is in cw direction from a to b
+                Scalar cwDist = 2*PI<Scalar> - ccwDist;
+                S::coeff(q, i) = so2::bound(S::coeff(a, i) - cwDist * d); 
+            }
+        }
+        return q;
+    }
+}
 #endif
