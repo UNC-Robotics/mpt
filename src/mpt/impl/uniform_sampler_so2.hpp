@@ -44,7 +44,7 @@
 #include "../box_bounds.hpp"
 
 namespace unc::robotics::mpt::impl {
-    template <typename T, int p, int dim>
+    template <typename T, int p, int dim = nigh::metric::Space<T, SO2<p>>::kDimensions>
     struct SO2UniformSampler {
     private:
         using Space = nigh::metric::Space<T, SO2<p>>;
@@ -97,11 +97,17 @@ namespace unc::robotics::mpt {
         return std::pow(2 * impl::PI<Scalar>, space.dimensions());
     }
     
-    // template <typename T, int p>
-    // struct UniformSampler<Space<T, SO2<p>>, Unbounded> {
-    //     UniformSampler(const Space<T, SO2<p>>& space, Unbounded) {
-    //     }
-    // };
+    template <typename T, int p>
+    struct UniformSampler<Space<T, SO2<p>>, Unbounded> 
+        : impl::SO2UniformSampler<T, p>
+    {
+        using Base = impl::SO2UniformSampler<T, p>;
+
+        UniformSampler(const Space<T, SO2<p>>& space, Unbounded = Unbounded{}) 
+            : Base(space)
+        {
+        }
+    };
 
     // template <typename T, int p, typename S, int dim>
     // struct UniformSampler<Space<T, SO2<p>>, BoxBounds<S, dim>>

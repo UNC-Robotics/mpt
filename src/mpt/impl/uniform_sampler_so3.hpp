@@ -46,7 +46,7 @@
 namespace unc::robotics::mpt::impl {
     template <typename T>
     struct SO3UniformSampler {
-        using Space = Space<T, SO3>;
+        using Space = nigh::metric::Space<T, SO3>;
         using Distance = typename Space::Distance;
         
         SO3UniformSampler(const Space&, Unbounded = Unbounded{}) {
