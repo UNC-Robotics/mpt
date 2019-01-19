@@ -64,3 +64,21 @@ TEST(distance_lp1) {
     EXPECT(space.distance(a, b)) == 0.0 + 2.0 + 2*M_PI - 4;
 }
 
+TEST(interpolate_scalar) {
+    using namespace unc::robotics::mpt;
+    using Space = unc::robotics::mpt::SO2Space<double>;
+
+    Space space;
+
+    EXPECT(interpolate(space, 1.0, 1.0, 0.0)) == 1.0; 
+    EXPECT(interpolate(space, 1.0, 1.0, 3.0)) == 1.0; 
+
+    EXPECT(interpolate(space, 1.0, 2.0, 0.5)) == 1.5; 
+    EXPECT(interpolate(space, 1.0, 2.0, -3.0)) == -2.0; 
+    EXPECT(interpolate(space, -1.0, 2.0, 4.0)) == 11.0 - 4*M_PI; 
+
+    EXPECT(interpolate(space, 5*M_PI/6, -5*M_PI/6, 1.0)) == -5*M_PI/6; 
+    EXPECT(interpolate(space, 5*M_PI/6, -5*M_PI/6, 2.0)) == -3*M_PI/6; 
+    // EXPECT(interpolate(space, -5*M_PI/6, 5*M_PI/6, -2.0)) == -1*M_PI/6;
+    EXPECT(interpolate(space, -5*M_PI/6, 5*M_PI/6, 2.0)) == 3*M_PI/6;
+}
