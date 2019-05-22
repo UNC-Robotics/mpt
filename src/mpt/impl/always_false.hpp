@@ -34,8 +34,8 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_STATIC_FAIL_HPP
-#define MPT_IMPL_STATIC_FAIL_HPP
+#ifndef MPT_IMPL_ALWAYS_FALSE_HPP
+#define MPT_IMPL_ALWAYS_FALSE_HPP
 
 namespace unc::robotics::mpt::impl {
     // helper for static assertions when template specialization (or
