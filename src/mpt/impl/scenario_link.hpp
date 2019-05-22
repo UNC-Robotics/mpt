@@ -38,6 +38,7 @@
 #define MPT_IMPL_SCENARIO_LINK_HPP
 
 #include "scenario_state.hpp"
+#include "always_false.hpp"
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -112,7 +113,7 @@ namespace unc::robotics::mpt::impl {
     template <class T, class = void>
     struct scenario_link {
         static_assert(
-            !std::is_same_v<T,T>,
+            always_false<T>,
             "scenario must have a link(State,State) method");
     };
 

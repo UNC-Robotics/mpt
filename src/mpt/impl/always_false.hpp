@@ -34,25 +34,20 @@
 //! @author Jeff Ichnowski
 
 #pragma once
-#ifndef MPT_IMPL_SCENARIO_GOAL_HPP
-#define MPT_IMPL_SCENARIO_GOAL_HPP
-
-#include <type_traits>
-#include "always_false.hpp"
+#ifndef MPT_IMPL_STATIC_FAIL_HPP
+#define MPT_IMPL_STATIC_FAIL_HPP
 
 namespace unc::robotics::mpt::impl {
-    template <class T, class = void>
-    struct scenario_goal {
-        static_assert(always_false<T>, "scenario must have a goal() method");
-    };
-
+    // helper for static assertions when template specialization (or
+    // lack of) determines that something is wrong.  This allows the
+    // code to include static_assert(always_false<T>, "informative
+    // message") and trigger the compiler to generate an informative
+    // message.  (static_assert(false, "...") always triggers,
+    // regardless of specialization since the assertion value is not
+    // based upon a parameter)
+    
     template <class T>
-    struct scenario_goal<T, std::void_t<decltype( std::declval<T>().goal() )> > {
-        using type = std::decay_t<decltype( std::declval<T>().goal() )>;
-    };
-
-    template <class T>
-    using scenario_goal_t = typename scenario_goal<T>::type;
+    static constexpr bool always_false = false;
 }
 
 #endif
