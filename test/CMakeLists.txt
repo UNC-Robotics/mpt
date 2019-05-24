@@ -16,7 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # set_property(GLOBAL PROPERTY JOB_POOLS concurrent_pool=1)
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(OpenMP REQUIRED)
+find_package(OPENMP REQUIRED)
 
 if (OPENMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")

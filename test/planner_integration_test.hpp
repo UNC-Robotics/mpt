@@ -37,7 +37,6 @@ namespace mpt_test {
         using Bounds = unc::robotics::mpt::BoxBounds<Scalar, dimensions>;
         using State = typename Space::Type;
         using Distance = typename Space::Distance;
-        using Goal = unc::robotics::mpt::GoalState<Space>;
 
         static Scalar defaultObstacleRadius() {
             return std::sqrt((Scalar)(dimensions - 1)) * 0.95;
@@ -66,7 +65,6 @@ namespace mpt_test {
 
         Space space_;
         Bounds bounds_{makeBounds()};
-        Goal goal_{1e-6, goalState()};
         
     public:
         const Space& space() const {
@@ -76,15 +74,60 @@ namespace mpt_test {
         const Bounds& bounds() const {
             return bounds_;
         }
-
-        const Goal& goal() const {
-            return goal_;
-        }
     };
 
-    template <typename Scalar = double, int dimensions = 3>
-    class BasicScenario : public TestScenarioBase<Scalar, dimensions> {
+    enum TestGoalKind {
+        TEST_GOAL_KIND_CLASS,
+        TEST_GOAL_KIND_METHOD
+    };
+
+    // This class template sits between the scenario and the base to
+    // provide an notion of the scenario's goal.
+    template <TestGoalKind goalKind, typename Scalar, int dimensions>
+    class TestScenarioGoalBase;
+
+    // Specialization of the TestScenarioGoalBase to provide a goal
+    // based upon a goal class.
+    template <typename Scalar, int dimensions>
+    class TestScenarioGoalBase<TEST_GOAL_KIND_CLASS, Scalar, dimensions>
+        : public TestScenarioBase<Scalar, dimensions>
+    {
         using Base = TestScenarioBase<Scalar, dimensions>;
+    public:
+        using Goal = unc::robotics::mpt::GoalState<typename Base::Space>;
+
+    private:
+        Goal goal_{1e-6, TestScenarioBase<Scalar, dimensions>::goalState()};
+
+    public:
+        const Goal& goal() const {
+            return goal_;
+        }        
+    };    
+
+    // Specialization of the TestScenarioGoalBase to provie a goal
+    // based upon a method
+    template <typename Scalar, int dimensions>
+    class TestScenarioGoalBase<TEST_GOAL_KIND_METHOD, Scalar, dimensions>
+        : public TestScenarioBase<Scalar, dimensions>
+    {
+        using Base = TestScenarioBase<Scalar, dimensions>;
+        
+    public:
+        auto isGoal(const typename Base::State& q) const {
+            auto dist = Base::space().distance(q, Base::goalState());
+            return std::make_pair(dist <= 1e-6, dist);
+        }
+
+        template <class RNG>
+        typename Base::State sampleGoal(RNG& rng) const {
+            return Base::goalState();
+        }
+    };
+    
+    template <TestGoalKind goalKind = TEST_GOAL_KIND_CLASS, typename Scalar = double, int dimensions = 3>
+    class BasicScenario : public TestScenarioGoalBase<goalKind, Scalar, dimensions> {
+        using Base = TestScenarioGoalBase<goalKind, Scalar, dimensions>;
 
         Scalar centerObstacleRadiusSquared_;
 
@@ -107,8 +150,8 @@ namespace mpt_test {
     };
 
     template <typename Scalar = double, int dimensions = 3>
-    class TrajectoryScenario : public TestScenarioBase<Scalar, dimensions> {
-        using Base = TestScenarioBase<Scalar, dimensions>;
+    class TrajectoryScenario : public TestScenarioGoalBase<TEST_GOAL_KIND_CLASS, Scalar, dimensions> {
+        using Base = TestScenarioGoalBase<TEST_GOAL_KIND_CLASS, Scalar, dimensions>;
 
         Scalar centerObstacleRadiusSquared_;
     public:
@@ -141,8 +184,8 @@ namespace mpt_test {
     };
 
     template <typename Scalar = double, int dimensions = 3>
-    class SharedTrajectoryScenario : public TestScenarioBase<Scalar, dimensions> {
-        using Base = TestScenarioBase<Scalar, dimensions>;
+    class SharedTrajectoryScenario : public TestScenarioGoalBase<TEST_GOAL_KIND_CLASS, Scalar, dimensions> {
+        using Base = TestScenarioGoalBase<TEST_GOAL_KIND_CLASS, Scalar, dimensions>;
 
         Scalar centerObstacleRadiusSquared_;
     public:
@@ -173,7 +216,7 @@ namespace mpt_test {
     struct has_add_goal<T, Q, std::void_t<decltype(std::declval<T>().addGoal(std::declval<Q>()))>>
         : std::true_type {};
 
-    template <typename Algorithm>
+    template <typename Algorithm, TestGoalKind goalKind = TEST_GOAL_KIND_CLASS>
     void testSolvingBasicScenario() {
         using Scalar = double;
         static constexpr int dim = 3;
@@ -181,7 +224,7 @@ namespace mpt_test {
         using namespace mpt;
         using namespace mpt_test;
         using namespace std::literals;
-        using Scenario = BasicScenario<Scalar, dim>;
+        using Scenario = BasicScenario<goalKind, Scalar, dim>;
         // 10 seconds should be more than enough time to solve any of these.
         static constexpr auto MAX_SOLVE_TIME = 10s;
     

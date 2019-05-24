@@ -45,6 +45,7 @@
 #include "../object_pool.hpp"
 #include "../planner_base.hpp"
 #include "../scenario_goal.hpp"
+#include "../scenario_goal_sampler.hpp"
 #include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
@@ -359,10 +360,11 @@ namespace unc::robotics::mpt::impl::prrt {
             MPT_LOG(TRACE) << "worker running";
 
             Sampler sampler(scenario_);
-            using Goal = scenario_goal_t<Scenario>;
-            if constexpr (goal_has_sampler_v<Goal>) {
+            if constexpr (scenario_has_goal_sampler_v<Scenario, RNG>) {
+                    //if constexpr (goal_has_sampler_v<Goal>) {
                 if (no_ == 0 && planner.goalBias_ > 0) {
-                    GoalSampler<Goal> goalSampler(scenario_.goal());
+                    scenario_goal_sampler_t<Scenario, RNG> goalSampler(scenario_);
+                    // GoalSampler<Goal> goalSampler(scenario_.goal());
                     std::uniform_real_distribution<Distance> uniform01;
 
                     // since we only have 1 thread performing goal
@@ -438,7 +440,7 @@ namespace unc::robotics::mpt::impl::prrt {
                 return;
 
             if (auto traj = validMotion(nearNode->state(), newState)) {
-                auto [isGoal, goalDist] = scenario_.goal()(scenario_.space(), newState);
+                auto [isGoal, goalDist] = scenario_goal<Scenario>::check(scenario_, newState);
                 (void)goalDist; // mark unused (for now, may be used in approx solutions)
 
                 Node* newNode = nodePool_.allocate(linkTrajectory(traj), nearNode, newState);

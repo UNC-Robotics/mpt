@@ -8,8 +8,12 @@ using namespace unc::robotics;
 using namespace mpt;
 using namespace mpt_test;
 
-TEST(prrt_star_until_solved) {
-    testSolvingBasicScenario<PRRTStar<>>();
+TEST(prrt_star_until_solved_with_goal_class) {
+    testSolvingBasicScenario<PRRTStar<>, TEST_GOAL_KIND_CLASS>();
+}
+
+TEST(prrt_star_until_solved_with_goal_method) {
+    testSolvingBasicScenario<PRRTStar<>, TEST_GOAL_KIND_METHOD>();
 }
 
 TEST(prrt_star_until_solved_with_stats) {
@@ -28,11 +32,11 @@ TEST(prrt_star_until_solved_with_linear) {
     testSolvingBasicScenario<PRRTStar<nigh::Linear>>();
 }
 
-TEST(prrt_start_until_solved_r_nearest) {
+TEST(prrt_star_until_solved_r_nearest) {
     testSolvingBasicScenario<PRRTStar<rewire_r_nearest>>();
 }
 
-TEST(prrt_start_until_solved_k_nearest) {
+TEST(prrt_star_until_solved_k_nearest) {
     testSolvingBasicScenario<PRRTStar<rewire_k_nearest>>();
 }
 

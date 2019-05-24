@@ -38,21 +38,54 @@
 #define MPT_IMPL_SCENARIO_GOAL_HPP
 
 #include <type_traits>
+#include "scenario_state.hpp"
 #include "always_false.hpp"
 
 namespace unc::robotics::mpt::impl {
+
     template <class T, class = void>
-    struct scenario_goal {
-        static_assert(always_false<T>, "scenario must have a goal() method");
+    struct scenario_has_goal_class : std::false_type {};
+
+    template <class T>
+    struct scenario_has_goal_class<T, std::void_t<decltype( std::declval<T>().goal() )>> : std::true_type {};
+
+    template <class T, class = void>
+    struct scenario_has_goal_method : std::false_type {};
+
+    template <class T>
+    struct scenario_has_goal_method<T, std::void_t<decltype( std::declval<T>().isGoal( std::declval<scenario_state_t<T>>() ))>>
+        : std::true_type {};
+
+    template <class T, bool classBased, bool methodBased>
+    struct scenario_goal_selector {
+        static_assert(always_false<T>, "scenario must have a goal() or goal(State) method, but not both");
+    };
+
+    // Template specialiation for scenarios that have a no-argument
+    // goal method that returns a goal object.
+    template <class T>
+    struct scenario_goal_selector<T, true, false> {
+        // using type = std::decay_t<decltype( std::declval<T>().goal() )>;
+
+        static decltype(auto) check(const T& scenario, const scenario_state_t<T>& q) {
+            return scenario.goal()(scenario.space(), q);
+        }
     };
 
     template <class T>
-    struct scenario_goal<T, std::void_t<decltype( std::declval<T>().goal() )> > {
-        using type = std::decay_t<decltype( std::declval<T>().goal() )>;
+    struct scenario_goal_selector<T, false, true> {
+        static decltype(auto) check(const T& scenario, const scenario_state_t<T>& q) {
+            return scenario.isGoal(q);
+        }
     };
-
+    
     template <class T>
-    using scenario_goal_t = typename scenario_goal<T>::type;
+    struct scenario_goal : scenario_goal_selector<
+        T,
+        scenario_has_goal_class<T>::value,
+        scenario_has_goal_method<T>::value>
+    {
+    };
 }
 
 #endif

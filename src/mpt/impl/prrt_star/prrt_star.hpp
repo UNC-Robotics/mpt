@@ -48,6 +48,7 @@
 #include "../planner_base.hpp"
 #include "../rrg_rewire_neighbors.hpp"
 #include "../scenario_goal.hpp"
+#include "../scenario_goal_sampler.hpp"
 #include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
@@ -446,10 +447,9 @@ namespace unc::robotics::mpt::impl::prrt_star {
             // typename Clock::duration nextProgress = 1s;
 
             Sampler sampler(scenario_);
-            using Goal = scenario_goal_t<Scenario>;
-            if constexpr (goal_has_sampler_v<Goal>) {
+            if constexpr (scenario_has_goal_sampler_v<Scenario, RNG>) {
                 if (no_ == 0 && planner.goalBias_ > 0) {
-                    GoalSampler<Goal> goalSampler(scenario_.goal());
+                    scenario_goal_sampler_t<Scenario, RNG> goalSampler(scenario_);
                     std::uniform_real_distribution<Distance> uniform01;
 
                     // since we only have 1 thread performing goal
@@ -537,7 +537,7 @@ namespace unc::robotics::mpt::impl::prrt_star {
             if (!traj)
                 return;
 
-            auto [isGoal, goalDist] = scenario_.goal()(scenario_.space(), newState);
+            auto [isGoal, goalDist] = scenario_goal<Scenario>::check(scenario_, newState);
             (void)goalDist; // mark unused (for now, may be used in approx solutions)
 
             Edge* parent = nearNode->edge(std::memory_order_relaxed);

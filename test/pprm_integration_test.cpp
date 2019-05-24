@@ -8,8 +8,8 @@ using namespace unc::robotics;
 using namespace mpt;
 using namespace mpt_test;
 
-TEST(pprm_until_solved) {
-    testSolvingBasicScenario<PPRM<>>();
+TEST(pprm_until_solved_with_goal_class) {
+    testSolvingBasicScenario<PPRM<>, TEST_GOAL_KIND_CLASS>();
 }
 
 TEST(pprm_until_solved_with_stats) {

@@ -46,6 +46,7 @@
 #include "../object_pool.hpp"
 #include "../planner_base.hpp"
 #include "../scenario_goal.hpp"
+#include "../scenario_goal_sampler.hpp"
 #include "../scenario_link.hpp"
 #include "../scenario_rng.hpp"
 #include "../scenario_sampler.hpp"
@@ -171,8 +172,7 @@ namespace unc::robotics::mpt::impl::pprm {
         template <typename DoneFn>
         std::enable_if_t<std::is_same_v<bool, std::result_of_t<DoneFn()>>>
         solve(DoneFn doneFn) {
-            using Goal = scenario_goal_t<Scenario>;
-            if constexpr (goal_has_sampler_v<Goal>)
+            if constexpr (scenario_has_goal_sampler_v<Scenario, RNG>)
                 if (goalNodes_.empty())
                     workers_[0].sampleGoals(*this);
 
@@ -286,8 +286,7 @@ namespace unc::robotics::mpt::impl::pprm {
 
         void sampleGoals(Planner& planner) {
             // TODO: more than one sample when appropriate
-            using Goal = scenario_goal_t<Scenario>;
-            GoalSampler<Goal> goalSampler(scenario_.goal());
+            scenario_goal_sampler_t<Scenario, RNG> goalSampler(scenario_);
             addSample(planner, goalSampler(rng_), Component::kGoal);
         }
 
@@ -312,7 +311,7 @@ namespace unc::robotics::mpt::impl::pprm {
 
             if ((flags & Component::kGoal) != 0) {
                 isGoal = true;
-            } else if ((isGoal = scenario_.goal()(scenario_.space(), q).first) == true) {
+            } else if ((isGoal = scenario_goal<Scenario>::check(scenario_, q).first) == true) {
                 flags = static_cast<Component::Flags>(flags | Component::kGoal);
             }
 

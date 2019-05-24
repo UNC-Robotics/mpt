@@ -8,8 +8,12 @@ using namespace unc::robotics::mpt;
 using namespace mpt_test;
 namespace nigh = unc::robotics::nigh;
 
-TEST(prrt_until_solved) {
-    testSolvingBasicScenario<PRRT<>>();
+TEST(prrt_until_solved_with_goal_class) {
+    testSolvingBasicScenario<PRRT<>, TEST_GOAL_KIND_CLASS>();
+}
+
+TEST(prrt_until_solved_with_goal_method) {
+    testSolvingBasicScenario<PRRT<>, TEST_GOAL_KIND_METHOD>();
 }
 
 TEST(prrt_until_solved_with_stats) {
