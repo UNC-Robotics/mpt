@@ -58,7 +58,7 @@ namespace unc::robotics::mpt::impl {
 
     template <class T, bool classBased, bool methodBased>
     struct scenario_goal_selector {
-        static_assert(always_false<T>, "scenario must have a goal() or goal(State) method, but not both");
+        static_assert(always_false<T>, "scenario must have a goal() or isGoal(State) method, but not both");
     };
 
     // Template specialiation for scenarios that have a no-argument
