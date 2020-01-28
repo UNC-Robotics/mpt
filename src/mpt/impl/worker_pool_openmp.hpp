@@ -74,7 +74,7 @@ namespace unc::robotics::mpt::impl {
             // single-threaded)
 
             unsigned nThreads = std::max(1, omp_get_max_threads());
-            if (maxThreads != 0 && nThreads < (unsigned)maxThreads) {
+            if (maxThreads != 0 && nThreads > (unsigned)maxThreads) {
                 MPT_LOG(TRACE) << "limiting threads to " << maxThreads
                                << ", which is less than hardware concurrency ("
                                << nThreads << ")";
