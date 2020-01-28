@@ -218,7 +218,7 @@ namespace unc::robotics::mpt::impl::prrt {
             return {cost, size};
         }
 
-        std::pair<const Node*, std::size_t> bestSolution() const {
+        std::pair<const Node*, std::size_t, Distance> bestSolution() const {
             Distance bestCost = std::numeric_limits<Distance>::infinity();
             std::size_t bestSize = 0;
             const Node* bestGoal = nullptr;
@@ -230,7 +230,7 @@ namespace unc::robotics::mpt::impl::prrt {
                     bestGoal = goal;
                 }
             }
-            return {bestGoal, bestSize};
+            return {bestGoal, bestSize, bestCost};
         }
         
         template <typename Fn>
@@ -261,7 +261,7 @@ namespace unc::robotics::mpt::impl::prrt {
 
     public:
         std::vector<State> solution() const {
-            auto [n, size] = bestSolution();
+            auto [n, size, cost] = bestSolution();
             std::vector<State> path;
             if (n) {
                 path.reserve(size);
@@ -275,7 +275,7 @@ namespace unc::robotics::mpt::impl::prrt {
 
         template <typename Fn>
         void solution(Fn fn) const {
-            auto [goal, size] = bestSolution();
+            auto [goal, size, cost] = bestSolution();
             // Either call:
             // fn(n)             size times
             // or
@@ -286,7 +286,7 @@ namespace unc::robotics::mpt::impl::prrt {
 
         void printStats() const {
             MPT_LOG(INFO) << "nodes in graph: " << nn_.size();
-            auto [cost, size] = bestSolution();
+            auto [goal, size, cost] = bestSolution();
             MPT_LOG(INFO) << "solutions: " << goalCount_.load() << ", best cost=" << cost
                           << " over " << size << " waypoints";
             if constexpr (reportStats) {
