@@ -218,7 +218,7 @@ namespace unc::robotics::mpt::impl::prrt {
             return {cost, size};
         }
 
-        std::pair<const Node*, std::size_t, Distance> bestSolution() const {
+        std::tuple<const Node*, std::size_t, Distance> bestSolution() const {
             Distance bestCost = std::numeric_limits<Distance>::infinity();
             std::size_t bestSize = 0;
             const Node* bestGoal = nullptr;
