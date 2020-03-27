@@ -36,7 +36,7 @@ Note: this demo shows MPT's capabilities and can be used to compare between algo
 
 ## Install Dependencies on Ubuntu
 
-    sudo apt install ninja eigen3 libfcl libassimp
+    sudo apt install ninja-build libeigen3-dev libfcl-dev libassimp-dev
 
 Make sure you have a build environment with the latest compilers:
 
