@@ -313,6 +313,13 @@ namespace unc::robotics::mpt::impl::prrt_star {
             return solution_.load(std::memory_order_relaxed) != nullptr;
         }
 
+        Distance solutionCost() const {
+            if (const Edge *edge = solution_.load(std::memory_order_acquire))
+                return edge->cost();
+            
+            return std::numeric_limits<Distance>::quiet_NaN();
+        }
+
         // prototype method
         std::vector<State> solution() const {
             std::vector<State> path;
