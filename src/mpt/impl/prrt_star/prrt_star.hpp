@@ -477,7 +477,9 @@ namespace unc::robotics::mpt::impl::prrt_star {
                             goto unbiasedSamplingLoop;
                         if (uniform01(rng_) < planner.goalBias_) {
                             Stats::biasedSample();
-                            addSample(planner, goalSampler(rng_));
+                            State goalBiasedSample = goalSampler(rng_);
+                            assert(scenario_.valid(goalBiasedSample));
+                            addSample(planner, goalBiasedSample);
                         } else {
                             addSample(planner, sampler(rng_));
                         }
@@ -697,7 +699,11 @@ namespace unc::robotics::mpt::impl::prrt_star {
                         oldEdge, newEdge,
                         std::memory_order_release,
                         std::memory_order_relaxed))
+                {
+                    if (oldEdge)
+                        Stats::rewireCount();
                     break;
+                }
                 // MPT_LOG(DEBUG, "CAS failed (setEdge)", no_);
             }
 
